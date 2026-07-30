@@ -202,3 +202,49 @@ static const ModuleParamConstants pitchConverterConstants[] = {
 const ModuleParamConstantsGroup pitchConverterModuleConstantsGroup = {
    const_cast<char*>("pitchConverter"),
    sizeof(pitchConverterConstants) / sizeof(pitchConverterConstants[0]), pitchConverterConstants};
+
+// Strike — note/gate → shaped excitation burst. Defaults from PM (ParamGroupData.m): Mallet,
+// hardness 0.3, note-relative contact, level 1. Items 1-2 (gate/hardness) are connection ports.
+static const ModuleParamConstants strikeConstants[] = {
+   {"gateInput",        StrikeParamItemGateInput,        0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"hardnessInput",    StrikeParamItemHardnessInput,    0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"type",             StrikeParamItemType,             0, 0, nullptr, (float)StrikeTypeMallet, (float)StrikeTypeNoise, (float)StrikeTypeMallet, 0},
+   {"hardness",         StrikeParamItemHardness,         0, 0, nullptr, 0.0f, 1.0f, 0.3f, 0},
+   {"hardnessModLevel", StrikeParamItemHardnessModLevel, 0, 0, nullptr, -1.0f, 1.0f, 1.0f, 0},
+   {"velToLevel",       StrikeParamItemVelToLevel,       0, 0, nullptr, 0.0f, 1.0f, 1.0f, 0},
+   {"velToHardness",    StrikeParamItemVelToHardness,    0, 0, nullptr, 0.0f, 1.0f, 0.5f, 0},
+   {"level",            StrikeParamItemLevel,            0, 0, nullptr, 0.0f, 2.0f, 1.0f, 0},
+   {"contactMode",      StrikeParamItemContactMode,      0, 0, nullptr, (float)StrikeContactNoteRelative, (float)StrikeContactWallClock, (float)StrikeContactNoteRelative, 0},
+};
+const ModuleParamConstantsGroup strikeConstantsGroup = {
+   const_cast<char*>("strike"), sizeof(strikeConstants) / sizeof(strikeConstants[0]), strikeConstants};
+
+// ModalBank — damped modal resonator bank. Defaults from PM (ParamGroupData.m). Items 1-5 are
+// connection ports (0,0,0). Material default = Bar; Stretch is an INDEX into kModalStretchValues.
+static const ModuleParamConstants modalBankConstants[] = {
+   {"input",          ModalBankParamItemInput,          0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection (excitation)
+   {"pitchInput",     ModalBankParamItemPitchInput,     0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"strikeInput",    ModalBankParamItemStrikeInput,    0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"decayModInput",  ModalBankParamItemDecayModInput,  0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"brightModInput", ModalBankParamItemBrightModInput, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"pitch",          ModalBankParamItemPitch,          0, 0, nullptr, -4.0f, 4.0f, 0.0f, 0},
+   {"pitchModLevel",  ModalBankParamItemPitchModLevel,  0, 0, nullptr, -5.0f, 5.0f, 1.0f, 0},
+   {"material",       ModalBankParamItemMaterial,       0, 0, nullptr, (float)ModalBankMaterialString, (float)ModalBankMaterialGenHarmonicNumber, (float)ModalBankMaterialBar, 0},
+   {"modeCount",      ModalBankParamItemModeCount,      0, 0, nullptr, 1.0f, 64.0f, 64.0f, 0},
+   {"stretch",        ModalBankParamItemStretch,        0, 0, nullptr, 0.0f, 19.0f, 9.0f, 0}, // index into kModalStretchValues
+   {"decayT60",       ModalBankParamItemDecayT60,       0, 0, nullptr, 0.02f, 60.0f, 2.0f, 0},
+   {"decayModLevel",  ModalBankParamItemDecayModLevel,  0, 0, nullptr, -5.0f, 5.0f, 0.0f, 0},
+   {"dampTilt",       ModalBankParamItemDampTilt,       0, 0, nullptr, 0.0f, 3.0f, 0.9f, 0},
+   {"dampBellAmount", ModalBankParamItemDampBellAmount, 0, 0, nullptr, -4.0f, 4.0f, 0.0f, 0},
+   {"dampBellCentre", ModalBankParamItemDampBellCentre, 0, 0, nullptr, 0.0f, 7.0f, 2.0f, 0},
+   {"dampBellWidth",  ModalBankParamItemDampBellWidth,  0, 0, nullptr, 0.1f, 4.0f, 0.4f, 0},
+   {"strikePosition", ModalBankParamItemStrikePosition, 0, 0, nullptr, 0.0f, 1.0f, 0.25f, 0},
+   {"strikeModLevel", ModalBankParamItemStrikeModLevel, 0, 0, nullptr, -5.0f, 5.0f, 0.0f, 0},
+   {"brightness",     ModalBankParamItemBrightness,     0, 0, nullptr, -1.0f, 1.0f, 0.0f, 0},
+   {"brightModLevel", ModalBankParamItemBrightModLevel, 0, 0, nullptr, -5.0f, 5.0f, 0.0f, 0},
+   {"spread",         ModalBankParamItemSpread,         0, 0, nullptr, 0.0f, 1.0f, 0.3f, 0},
+   {"mix",            ModalBankParamItemMix,            0, 0, nullptr, 0.0f, 1.0f, 1.0f, 0},
+   {"level",          ModalBankParamItemLevel,          0, 0, nullptr, 0.0f, 2.0f, 0.5f, 0},
+};
+const ModuleParamConstantsGroup modalBankConstantsGroup = {
+   const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};

@@ -14,9 +14,11 @@
 #include "IFSOscModule.hpp"
 #include "LPFilterModule.hpp"
 #include "LevelModule.hpp"
+#include "ModalBankModule.hpp"
 #include "PitchConverterModule.hpp"
 #include "SinOscillatorModule.hpp"
 #include "SlewModule.hpp"
+#include "StrikeModule.hpp"
 #include "pm_addresses.h"
 #include "pm_param_data.h"
 
@@ -71,6 +73,15 @@ const std::vector<ModuleInitSpec>& getModuleInitSpecs() {
        nullptr, nullptr, nullptr},
       {finalAddress, &finalConstantsGroup, InitFinalModule, DeinitFinalModule, ProcessFinalModule,
        MIDIFinalModule, nullptr, nullptr, SampleRateFinalModule},
+
+      // --- StruckSynth modules (present but unconnected until buildDefaultPatch wires them) ---
+      // Strike: the exciter. Uses the MIDI slot (note-on → burst); Reset clears any active burst.
+      {strike1Address, &strikeConstantsGroup, InitStrikeModule, DeinitStrikeModule,
+       ProcessStrikeModule, MIDIStrikeModule, nullptr, ResetStrikeModule, SampleRateStrikeModule},
+      // ModalBank: the resonator. No MIDI/param procs; Reset flushes filter state (voice alloc,
+      // NOT note-on — re-striking a ringing bank must not reset the ring-down).
+      {modalBank1Address, &modalBankConstantsGroup, InitModalBankModule, DeinitModalBankModule,
+       ProcessModalBankModule, nullptr, nullptr, ResetModalBankModule, SampleRateModalBankModule},
    };
    return specs;
 }

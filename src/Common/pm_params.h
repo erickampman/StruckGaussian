@@ -90,6 +90,8 @@ enum ModuleParamKind : NSUInteger {
    ModuleParamKindJuliaGran,
    ModuleParamKindClockGran,
    ModuleParamKindCVMixer, // IFSynth: combine mod sources (add/multiply, per-input enable)
+   ModuleParamKindStrike,    // StruckSynth: note/gate → shaped excitation burst
+   ModuleParamKindModalBank, // StruckSynth: bank of damped modal resonators
 };
 
 // Module instance — the middle byte of a param address (1..24).
@@ -298,6 +300,101 @@ enum VoiceStealAlgorithm : NSUInteger {
    VoiceStealAlgorithmClosest,
    VoiceStealAlgorithmFurthest,
 };
+
+// --- StruckSynth: Strike (exciter) -------------------------------------------------------
+// Turns a note/gate event into a shaped excitation burst for a resonator. MIDI note-on drives
+// it directly (velocity → strength); the optional Gate input takes over for non-MIDI triggering.
+enum StrikeParamItem : NSUInteger {
+   StrikeParamItemGateInput = 1,     // connection: optional external trigger (rising edge)
+   StrikeParamItemHardnessInput,     // connection: optional hardness modulation
+   StrikeParamItemType,              // 0 = Mallet (bump), 1 = Noise burst
+   StrikeParamItemHardness,          // 0 = 1-sample impulse (hard/bright) .. 1 = soft/dark
+   StrikeParamItemHardnessModLevel,  // scales HardnessInput
+   StrikeParamItemVelToLevel,        // 0 = fixed amplitude .. 1 = fully velocity-scaled
+   StrikeParamItemVelToHardness,     // harder hit → shorter/brighter contact
+   StrikeParamItemLevel,             // output gain
+   StrikeParamItemContactMode,       // how contact time is measured (see StrikeContactMode)
+};
+
+enum StrikeType : NSUInteger {
+   StrikeTypeMallet = 0,
+   StrikeTypeNoise,
+};
+
+enum StrikeContactMode : NSUInteger {
+   StrikeContactNoteRelative = 0,  // contact spans a fixed number of periods of the note
+   StrikeContactWallClock,         // fixed contact time in ms (physical mallet)
+};
+
+// --- StruckSynth: ModalBank (resonator) --------------------------------------------------
+// A bank of independently damped two-pole resonators, one per vibrational mode, excited by an
+// input signal. Items 1-5 are connection ports; the rest are object/decay/strike/output
+// controls. Core (framework-free): ModalBank.hpp/.cpp, ModalMaterials/Generators.hpp.
+enum ModalBankParamItem : NSUInteger {
+   ModalBankParamItemInput = 1,      // connection: excitation audio in (L/R)
+   ModalBankParamItemPitchInput,     // connection: from Pitch Converter; octaves re A440
+   ModalBankParamItemStrikeInput,    // connection: patch velocity here
+   ModalBankParamItemDecayModInput,  // connection
+   ModalBankParamItemBrightModInput, // connection
+   // Object
+   ModalBankParamItemPitch,          // transpose offset (octaves), ADDED to input
+   ModalBankParamItemPitchModLevel,  // scales PitchInput (1 = unity tracking, 0 = fixed pitch)
+   ModalBankParamItemMaterial,       // indexed; see ModalBankMaterial
+   ModalBankParamItemModeCount,      // 1..64; clamps to the table's depth
+   ModalBankParamItemStretch,        // INDEX into kModalStretchValues (inharmonicity)
+   // Decay
+   ModalBankParamItemDecayT60,       // seconds, T60 of mode 0
+   ModalBankParamItemDecayModLevel,
+   ModalBankParamItemDampTilt,       // T60_i *= ratio^(-tilt); 0 metal, ~2 wood
+   ModalBankParamItemDampBellAmount, // octaves of T60 at the centre; 0 = off
+   ModalBankParamItemDampBellCentre, // octaves above the fundamental
+   ModalBankParamItemDampBellWidth,  // Gaussian sigma, in octaves
+   // Strike
+   ModalBankParamItemStrikePosition, // 0..1; 0.5 cancels even modes
+   ModalBankParamItemStrikeModLevel,
+   ModalBankParamItemBrightness,     // amplitude tilt across modes
+   ModalBankParamItemBrightModLevel,
+   // Output
+   ModalBankParamItemSpread,         // stereo distribution of modes
+   ModalBankParamItemMix,            // 1 = source, <1 = resonator in a path
+   ModalBankParamItemLevel,
+};
+
+// Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials
+// (ModalMaterials.hpp) for the static tables, then the procedural generators whose order MUST
+// match ModalSeriesID (ModalGenerators.hpp): materialIdx - MODAL_BANK_FIRST_GENERATOR = series.
+enum ModalBankMaterial : NSUInteger {
+   ModalBankMaterialString = 0,
+   ModalBankMaterialBar,
+   ModalBankMaterialTunedBar,
+   ModalBankMaterialMembrane,
+   ModalBankMaterialOpenTube,
+   ModalBankMaterialClosedTube,
+   ModalBankMaterialTine,
+   ModalBankMaterialBell,
+   ModalBankMaterialGuitarBody,
+   ModalBankMaterialViolinBody,
+   ModalBankMaterialSoundboard,
+   ModalBankMaterialGenericBody,
+   ModalBankMaterialGen0,          // first generator (Harmonic n)
+   ModalBankMaterialGenOctave,
+   ModalBankMaterialGenFibonacci,
+   ModalBankMaterialGenPrime,
+   ModalBankMaterialGenTriangular,
+   ModalBankMaterialGenTetrahedral,
+   ModalBankMaterialGenPartition,
+   ModalBankMaterialGenGolden,
+   ModalBankMaterialGenSilver,
+   ModalBankMaterialGenPiano,
+   ModalBankMaterialGenPower,
+   ModalBankMaterialGenSqrt,
+   ModalBankMaterialGenBox3D,
+   ModalBankMaterialGenHarmonicNumber,
+   ModalBankMaterialCount,
+};
+
+// First generator index; everything at or above this is procedural (see ModalGenerators.hpp).
+#define MODAL_BANK_FIRST_GENERATOR ModalBankMaterialGen0
 
 // Per-parameter constants (portable): the source for CLAP clap_param_info generation.
 struct ModuleParamConstants {

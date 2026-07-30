@@ -23,7 +23,7 @@ static int g_fails = 0;
 
 int main() {
    const auto& specs = getModuleInitSpecs();
-   CHECK(specs.size() == 16, "16 v1 module specs");
+   CHECK(specs.size() == 18, "18 v1 module specs");
 
    ModuleFactory factory(48000.0, 512);
    ModuleMap map;
@@ -37,7 +37,7 @@ int main() {
       mod->setPitchConverter(&pc);
       map.add(s.id, std::move(mod));
    }
-   CHECK(map.allModules().size() == 16, "16 modules built into the map");
+   CHECK(map.allModules().size() == 18, "18 modules built into the map");
 
    // Every named v1 module is present.
    CHECK(map.get(pitchConverter1Address) != nullptr, "pitchConverter present");
@@ -53,6 +53,8 @@ int main() {
    CHECK(map.get(cvMixer2Address) != nullptr, "cvMixer2 present");
    CHECK(map.get(combine1Address) != nullptr, "combine present");
    CHECK(map.get(finalAddress) != nullptr, "final present");
+   CHECK(map.get(strike1Address) != nullptr, "strike present");
+   CHECK(map.get(modalBank1Address) != nullptr, "modalBank present");
 
    // The SinOsc built by the factory still runs and oscillates.
    Module* osc = map.get(sinOsc1Address);
