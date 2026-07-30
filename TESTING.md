@@ -1,0 +1,71 @@
+# Testing IFSynth
+
+The project ships a suite of in-process self-tests (via CTest) plus the CLAP conformance
+validator. Everything runs headless on Linux/macOS — no DAW or audio device required.
+
+## Prerequisites
+
+- CMake ≥ 3.17 and a C++20 compiler (gcc or clang).
+- Submodules (CLAP headers for the tests; DPF + pugl for the plugin build):
+
+  ```sh
+  git submodule update --init --recursive
+  ```
+
+- To build the plugin itself (DPF's OpenGL/NanoVG UI), the X11 + GL dev packages:
+
+  ```sh
+  sudo apt install pkg-config libgl1-mesa-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev
+  ```
+
+## Build and run all tests
+
+```sh
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
+Add `-DIFSYNTH_WERROR=ON` at configure time to treat warnings as errors for the framework
+and the `pm-selftest` glue (this is what CI keys on). The tests that pull in vendored
+PolygraphModular headers stay on that code's own warning style.
+
+## What each test covers
+
+The eight CTest cases exercise the `pm_framework` engine end-to-end (the DPF plugin wrapper
+itself is covered by `clap-validator`, below):
+
+| CTest name       | Executable               | Verifies |
+|------------------|--------------------------|----------|
+| `pm`             | `pm-selftest`            | UMP MIDI layer: predicates, raw-word decode, microtonal pitch attribute, CLAP→UMP decoders |
+| `pm-module`      | `pm-module-test`         | `Module` + `ModuleMap` core: param read/write, process proc, map add/get |
+| `pm-sinosc`      | `pm-sinosc-test`         | The vendored sine oscillator produces an ~A440 sine |
+| `pm-adsr`        | `pm-adsr-test`           | ADSR envelope: note-on drives attack, note-off drives release to ~0 |
+| `pm-modules`     | `pm-modules-test`        | Combine / Final / Slew compile+run; PitchConverter maps note→pitch |
+| `pm-factory`     | `pm-factory-test`        | ModuleFactory + the trimmed init-specs build all six v1 modules |
+| `pm-voice`       | `pm-voice-test`          | One full voice renders a note end-to-end and releases |
+| `pm-voicemanager`| `pm-voicemanager-test`   | Polyphony: a 3-note chord allocates 3 voices and frees them on release |
+
+## Running a single test
+
+```sh
+ctest --test-dir build -R pm-voice --output-on-failure   # by name (regex)
+./build/pm-voice-test                                     # or run the binary directly
+```
+
+Each test binary prints diagnostic values (e.g. `Voice: peak=0.87 tail=0.0000`) and ends with
+`ALL PASS`; CTest keys success on that string.
+
+## CLAP conformance
+
+Validate the built plugin against the CLAP spec with
+[`clap-validator`](https://github.com/free-audio/clap-validator):
+
+```sh
+clap-validator validate build/bin/IFSynth.clap
+```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs the configure + build + `ctest` on every push across
+Linux (gcc/clang) and macOS (clang) with `-DIFSYNTH_WERROR=ON`.
