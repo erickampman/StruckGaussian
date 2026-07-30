@@ -55,61 +55,26 @@ void VoiceManager::reset() {
 void VoiceManager::buildDefaultPatch(Voice& voice)
 {
 #if HAS_DEFAULT_PATCH
-	// sinOsc1Address
-	// combine1Address
-	// finalAddress
+    // StruckSynth v1 voice: MIDI note-on -> Strike (exciter) -> ModalBank (resonator) -> Final.
+    // No VCA envelope: the bank's own T60 decay IS the amplitude envelope, and the voice frees
+    // on silence (VoiceStateManager Active -> Deactivating -> Inactive), so the ring-down
+    // survives note-off. Pitch tracks the note through the shared Slew (glide). The IFS / Sine /
+    // LPF / CVMixer / env modules stay instantiated (module specs) but unconnected here.
     Module* pitchConverterModule = voice.getModule(pitchConverter1Address);
-    Module* slewModule = voice.getModule(slew1Address);
-    // Two oscillators: the Sine (master) and the IFS (slave, hard-synced to the sine).
-    Module* sinOscModule = voice.getModule(sinOsc1Address);
-    Module* ifsOscModule = voice.getModule(ifsOsc1Address);
-    // IFSEnv is the active amplitude envelope. ADSR stays instantiated (module specs) but is
-    // left unconnected here.
-    Module* envModule = voice.getModule(ifsEnv1Address);
-    // 24 dB/oct LPF after the osc mixer, before the VCA.
-    Module* lpfModule = voice.getModule(lpf1Address);
-    Module* sinLevelModule = voice.getModule(level1Address);  // scales the audible sine
-    Module* oscMixModule = voice.getModule(combine2Address); // osc mixer (Add): sine + IFS
-	Module* combineModule = voice.getModule(combine1Address);
-	Module* finalModule = voice.getModule(finalAddress);
+    Module* slewModule           = voice.getModule(slew1Address);
+    Module* strikeModule         = voice.getModule(strike1Address);
+    Module* modalBankModule      = voice.getModule(modalBank1Address);
+    Module* finalModule          = voice.getModule(finalAddress);
 
-	// No real reason to have to do it in this order...
-	//					 upstream    -> downstream   (downstream param)
+    //                       upstream            -> downstream      (downstream input port)
     ++(finalModule->activeCount);
-	voice.connectModules(combineModule, finalModule, finalInputAddress);
-    // Osc mixer: (SinOsc → Level(sineLevel)) + (IFSOsc × ifsLevel) → LPF → VCA. The sine's audible
-    // level is a Level stage, NOT its raw output, so the raw sine still drives IFS sync at level 0.
-    voice.connectModules(sinOscModule, sinLevelModule, level1InputAddress);
-    voice.connectModules(sinLevelModule, oscMixModule, combine2Input1Address);
-    voice.connectModules(ifsOscModule, oscMixModule, combine2Input2Address);
-    voice.connectModules(oscMixModule, lpfModule, lpf1InputAddress);
-	voice.connectModules(lpfModule, combineModule, combine1Input1Address);
-	voice.connectModules(envModule, combineModule, combine1Input2Address);
-    // Both oscillators track the note pitch (via the shared Slew).
-    voice.connectModules(slewModule, ifsOscModule, ifsOsc1PitchInputAddress);
-    voice.connectModules(slewModule, sinOscModule, sinOsc1PitchInputAddress);
-    voice.connectModules(pitchConverterModule, slewModule, slew1InputAddress);
-    // Hard sync: the (detuned) sine master drives the IFS osc's sync input; per-channel
-    // zero-crossings reset the IFS phase, preserving the L/R detune.
-    voice.connectModules(sinOscModule, ifsOscModule, ifsOsc1SyncInputAddress);
-    // The osc mixer sums (rather than the default multiply).
-    voice.setParameter(combine2TypeAddress, static_cast<float>(ParamItemCombineType_Add));
-    // Key tracking: the same note-pitch signal feeds the LPF's 2nd freq-mod input; the Key Track
-    // knob (LPFParamItemFreqModLevel2) scales how much the cutoff follows the note (1 = 1:1).
-    voice.connectModules(slewModule, lpfModule, lpf1KeyTrackInputAddress);
-
-    // CV mixer inputs: LFO1+Env1 → mixer 1, LFO2+Env2 → mixer 2. Env1 fans out (it also drives
-    // the VCA). The mixers' outputs aren't patched to destinations yet, so nothing is pulled
-    // through them and the mod sources stay dormant until the destination mod-inputs exist.
-    Module* lfo1Module = voice.getModule(ifsLFO1Address);
-    Module* lfo2Module = voice.getModule(ifsLFO2Address);
-    Module* env2Module = voice.getModule(ifsEnv2Address);
-    Module* cvMixer1Module = voice.getModule(cvMixer1Address);
-    Module* cvMixer2Module = voice.getModule(cvMixer2Address);
-    voice.connectModules(lfo1Module, cvMixer1Module, cvMixer1LFOInputAddress);
-    voice.connectModules(envModule,  cvMixer1Module, cvMixer1EnvInputAddress);
-    voice.connectModules(lfo2Module, cvMixer2Module, cvMixer2LFOInputAddress);
-    voice.connectModules(env2Module, cvMixer2Module, cvMixer2EnvInputAddress);
+    voice.connectModules(modalBankModule,      finalModule,     finalInputAddress);
+    // Strike excites the bank. connectModules bumps Strike's activeCount, so it receives the
+    // MIDI note-on (velocity -> strike strength) that ModalBank itself does not handle.
+    voice.connectModules(strikeModule,         modalBankModule, modalBank1InputAddress);
+    // Note pitch -> Slew (glide) -> the bank's pitch-tracking input (octaves re A440).
+    voice.connectModules(pitchConverterModule, slewModule,      slew1InputAddress);
+    voice.connectModules(slewModule,           modalBankModule, modalBank1PitchInputAddress);
 #else
     // do nothing
 #endif
