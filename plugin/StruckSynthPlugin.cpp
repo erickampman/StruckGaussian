@@ -1,10 +1,12 @@
-// IFSynthPlugin.cpp — DSP side: DPF Plugin wrapper around the vendored PolygraphModular
+// StruckSynthPlugin.cpp — DSP side: DPF Plugin wrapper around the vendored PolygraphModular
 // voice engine. DPF hands us MIDI 1.0 events + a parameter interface and generates the CLAP
-// (VST3/LV2) wrapper; all the actual synthesis is the same VoiceManager the CLAP build used.
+// (VST3/LV2) wrapper; all the synthesis is the same VoiceManager the self-tests exercise.
 //
 //   MIDI events  → pm::UmpMessage → VoiceManager (polyphony / stealing / mono)
-//   ADSR params  → VoiceManager::setParameter() (propagates to every voice, live)
-//   run()        → chunked VoiceManager::process() + master gain
+//   params       → VoiceManager::setParameter() (propagates to every voice, live)
+//   run()        → chunked VoiceManager::process()
+//
+// The v1 voice is Strike (exciter) → ModalBank (resonator) → Final; see buildDefaultPatch.
 
 #include "DistrhoPlugin.hpp"
 
@@ -44,8 +46,8 @@ protected:
     const char* getMaker()    const override { return "Unlikelyware"; }
     const char* getHomePage() const override { return "https://unlikelyware.com/strucksynth"; }
     const char* getLicense()  const override { return "MIT"; }
-    uint32_t    getVersion()  const override { return d_version(0, 3, 0); }
-    int64_t     getUniqueId() const override { return d_cconst('I', 'F', 'S', 'y'); }
+    uint32_t    getVersion()  const override { return d_version(0, 4, 0); }
+    int64_t     getUniqueId() const override { return d_cconst('S', 't', 'r', 'k'); }
 
     /* -- init ------------------------------------------------------------- */
     void initAudioPort(bool input, uint32_t index, AudioPort& port) override
@@ -93,7 +95,6 @@ protected:
     {
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float width = fValues[kParamSpread]; // level is now per-osc (in the engine)
 
         uint32_t pos = 0, ev = 0;
         while (pos < frames)
@@ -106,7 +107,7 @@ protected:
             if (ev < midiEventCount && midiEvents[ev].frame < frames)
                 next = midiEvents[ev].frame;
 
-            renderSegment(outL, outR, pos, next, width);
+            renderSegment(outL, outR, pos, next);
             pos = next;
         }
     }
@@ -115,138 +116,39 @@ private:
     std::unique_ptr<VoiceManager> fVoiceManager;
     float                         fValues[kParamCount];
 
-    // Map a DPF param index onto its VoiceManager module item address (gain excepted).
+    // Map a DPF param index onto its VoiceManager module item address. Globals handled specially
+    // in applyParam (voice mode + glide) have no direct address here.
     static AUParameterAddress vmAddress(uint32_t paramIndex)
     {
         switch (paramIndex)
         {
-        // IFS oscillator
-        case kParamOscPitch:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemPitch);
-        case kParamOscFine:       return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemPitchFine);
-        case kParamOscDetune:     return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemDetune);
-        case kParamOscBx:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemBx);
-        case kParamOscBy:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemBy);
-        case kParamOscStartEndY:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemStartEndY);
-        case kParamOscSquash1:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemIFS1Squash);
-        case kParamOscSquash2:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemIFS2Squash);
-        case kParamOscSmoothing:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemSmoothing);
-        case kParamOscIterations: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemIterations);
-        // IFS envelope
-        case kParamEnvDuration:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemDuration);
-        case kParamEnvBlueX:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemBlueX);
-        case kParamEnvBlueY:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemBlueY);
-        case kParamEnvGreenX:     return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemGreenX);
-        case kParamEnvGreenY:     return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemGreenY);
-        case kParamEnvSquash1:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemIFS1Squash);
-        case kParamEnvSquash2:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemIFS2Squash);
-        case kParamEnvSquash3:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemIFS3Squash);
-        case kParamEnvSmoothing:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemSmoothing);
-        case kParamEnvIterations: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemIterations);
-        case kParamEnvHoldMode:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance1, IFSEnvParamItemHoldMode);
-        // IFS LFO
-        case kParamLfoRate:       return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemPitch);
-        case kParamLfoBx:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemBx);
-        case kParamLfoBy:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemBy);
-        case kParamLfoStartEndY:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemStartEndY);
-        case kParamLfoSquash1:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemIFS1Squash);
-        case kParamLfoSquash2:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemIFS2Squash);
-        case kParamLfoSmoothing:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemSmoothing);
-        case kParamLfoIterations: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance1, IFSLFOParamItemIterations);
-        // IFS envelope 2 (instance 2)
-        case kParamEnv2Duration:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemDuration);
-        case kParamEnv2BlueX:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemBlueX);
-        case kParamEnv2BlueY:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemBlueY);
-        case kParamEnv2GreenX:     return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemGreenX);
-        case kParamEnv2GreenY:     return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemGreenY);
-        case kParamEnv2Squash1:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemIFS1Squash);
-        case kParamEnv2Squash2:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemIFS2Squash);
-        case kParamEnv2Squash3:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemIFS3Squash);
-        case kParamEnv2Smoothing:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemSmoothing);
-        case kParamEnv2Iterations: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemIterations);
-        case kParamEnv2HoldMode:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSEnv, ModuleInstance2, IFSEnvParamItemHoldMode);
-        // IFS LFO 2 (instance 2)
-        case kParamLfo2Rate:       return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemPitch);
-        case kParamLfo2Bx:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemBx);
-        case kParamLfo2By:         return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemBy);
-        case kParamLfo2StartEndY:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemStartEndY);
-        case kParamLfo2Squash1:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemIFS1Squash);
-        case kParamLfo2Squash2:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemIFS2Squash);
-        case kParamLfo2Smoothing:  return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemSmoothing);
-        case kParamLfo2Iterations: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSLFO, ModuleInstance2, IFSLFOParamItemIterations);
-        // CV mixer 1 (instance 1)
-        case kParamMix1EnableLFO: return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance1, CVMixerParamItemEnableLFO);
-        case kParamMix1EnableEnv: return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance1, CVMixerParamItemEnableEnv);
-        case kParamMix1EnableCC:  return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance1, CVMixerParamItemEnableCC);
-        case kParamMix1CCNumber:  return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance1, CVMixerParamItemCCNumber);
-        case kParamMix1Mode:      return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance1, CVMixerParamItemMode);
-        // CV mixer 2 (instance 2)
-        case kParamMix2EnableLFO: return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance2, CVMixerParamItemEnableLFO);
-        case kParamMix2EnableEnv: return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance2, CVMixerParamItemEnableEnv);
-        case kParamMix2EnableCC:  return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance2, CVMixerParamItemEnableCC);
-        case kParamMix2CCNumber:  return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance2, CVMixerParamItemCCNumber);
-        case kParamMix2Mode:      return MODULE_PARAM_ADDRESS(ModuleParamKindCVMixer, ModuleInstance2, CVMixerParamItemMode);
-        // IFSOsc mod depths (the module ModLevel params)
-        case kParamOscPitchModDepth: return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemPitchModLevel);
-        case kParamOscBxModDepth:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemBxModLevel);
-        case kParamOscByModDepth:    return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemByModLevel);
-        case kParamOscSq1ModDepth:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemSquash1ModLevel);
-        case kParamOscSq2ModDepth:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemSquash2ModLevel);
-        // Low-pass filter
-        case kParamLpfCutoff:     return MODULE_PARAM_ADDRESS(ModuleParamKindButterworthLowPassFilter, ModuleInstance1, LPFParamItemPitch);
-        case kParamLpfResonance:  return MODULE_PARAM_ADDRESS(ModuleParamKindButterworthLowPassFilter, ModuleInstance1, LPFParamItemQ);
-        case kParamLpfKeyTrack:      return MODULE_PARAM_ADDRESS(ModuleParamKindButterworthLowPassFilter, ModuleInstance1, LPFParamItemFreqModLevel2);
-        case kParamLpfCutoffModDepth:return MODULE_PARAM_ADDRESS(ModuleParamKindButterworthLowPassFilter, ModuleInstance1, LPFParamItemFreqModLevel);
-        // Sine oscillator (master) + osc mix levels + IFS hard-sync mode. (SinPitch is an interval
-        // dropdown handled specially in applyParam, so it has no direct address here.)
-        case kParamSinFine:       return MODULE_PARAM_ADDRESS(ModuleParamKindSinOsc, ModuleInstance1, SinOscParamItemPitchFine);
-        case kParamSinDetune:     return MODULE_PARAM_ADDRESS(ModuleParamKindSinOsc, ModuleInstance1, SinOscParamItemDetune);
-        case kParamSinWaveform:   return MODULE_PARAM_ADDRESS(ModuleParamKindSinOsc, ModuleInstance1, SinOscParamItemWaveform);
-        case kParamSinLevel:      return MODULE_PARAM_ADDRESS(ModuleParamKindLevel, ModuleInstance1, LevelParamItemLevel);
-        case kParamIfsLevel:      return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemLevel);
-        case kParamIfsSyncMode:   return MODULE_PARAM_ADDRESS(ModuleParamKindIFSOsc, ModuleInstance1, IFSOscParamItemSyncMode);
-        case kParamOsc2PitchModDepth: return MODULE_PARAM_ADDRESS(ModuleParamKindSinOsc, ModuleInstance1, SinOscParamItemFreqModLevel);
-        default:                  return 0;
+        // Master output / stereo (ModalBank's own output stage)
+        case kParamLevel:          return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemLevel);
+        case kParamSpread:         return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemSpread);
+        // Strike (exciter)
+        case kParamStrikeType:     return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemType);
+        case kParamHardness:       return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemHardness);
+        case kParamVelToLevel:     return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemVelToLevel);
+        case kParamVelToHardness:  return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemVelToHardness);
+        case kParamContactMode:    return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemContactMode);
+        // ModalBank: object
+        case kParamPitch:          return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemPitch);
+        case kParamMaterial:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemMaterial);
+        case kParamModeCount:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemModeCount);
+        case kParamStretch:        return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStretch);
+        // ModalBank: decay
+        case kParamDecayT60:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayT60);
+        case kParamDampTilt:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTilt);
+        case kParamDampBellAmount: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellAmount);
+        case kParamDampBellCentre: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellCentre);
+        case kParamDampBellWidth:  return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellWidth);
+        // ModalBank: timbre
+        case kParamStrikePosition: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikePosition);
+        case kParamBrightness:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemBrightness);
+        // ModalBank: output
+        case kParamMix:            return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemMix);
+        default:                   return 0;
         }
-    }
-
-    // Mod-source dropdown index (0 = None) → the source module's base address.
-    static AUParameterAddress modSourceAddr(int idx)
-    {
-        switch (idx)
-        {
-        case 1: return ifsLFO1Address;
-        case 2: return ifsLFO2Address;
-        case 3: return ifsEnv1Address;
-        case 4: return ifsEnv2Address;
-        case 5: return cvMixer1Address;
-        case 6: return cvMixer2Address;
-        default: return 0; // None
-        }
-    }
-
-    // Handle the routing params (dropdowns → connections). Returns true if handled.
-    bool applyModRouting(uint32_t index, float value)
-    {
-        AUParameterAddress destInput = 0;
-        switch (index)
-        {
-        case kParamOscPitchModSrc: destInput = ifsOsc1PitchModInputAddress;   break;
-        case kParamOscBxModSrc:    destInput = ifsOsc1BxModInputAddress;      break;
-        case kParamOscByModSrc:    destInput = ifsOsc1ByModInputAddress;      break;
-        case kParamOscSq1ModSrc:   destInput = ifsOsc1Squash1ModInputAddress; break;
-        case kParamOscSq2ModSrc:   destInput = ifsOsc1Squash2ModInputAddress; break;
-        case kParamLpfCutoffModSrc: destInput = lpf1FreqModInputAddress;      break;
-        case kParamOsc2PitchModSrc: destInput = sinOsc1PitchModInputAddress;  break;
-        case kParamVCASource:
-            // The amplitude VCA always has an env: 0 = Env 1, 1 = Env 2.
-            fVoiceManager->setModSource(combine1Input2Address,
-                                        value < 0.5f ? ifsEnv1Address : ifsEnv2Address);
-            return true;
-        default:
-            return false;
-        }
-        fVoiceManager->setModSource(destInput, modSourceAddr(static_cast<int>(value + 0.5f)));
-        return true;
     }
 
     static bool isMono(float voiceModeValue)
@@ -254,9 +156,8 @@ private:
         return static_cast<int>(voiceModeValue + 0.5f) == 0; // 0 = Mono, 1 = poly
     }
 
-    // Voice mode: Mono = 1 voice + VoiceManager legato (engages the last-note note-stack) + the
-    // envelopes' FindMatchingY level-matching (click-free retrigger). Poly = 10 voices, none of
-    // that. Glide (applySlew) also keys off mono.
+    // Voice mode: Mono = 1 voice + VoiceManager legato (last-note note-stack); Poly = 10 voices.
+    // The modal voice has no amplitude envelope, so there is no envelope legato to configure.
     void applyVoiceMode(float value)
     {
         if (!fVoiceManager)
@@ -264,9 +165,6 @@ private:
         const bool mono = isMono(value);
         setConfig(MIDIParamItemVoiceCount, mono ? 1.0f : 10.0f);
         setConfig(MIDIParamItemLegato,     mono ? 1.0f : 0.0f);
-        const float envLegato = mono ? 1.0f : 0.0f; // 1 = FindMatchingY
-        fVoiceManager->setParameter(ifsEnv1LegatoModeAddress, envLegato);
-        fVoiceManager->setParameter(ifsEnv2LegatoModeAddress, envLegato);
         applySlew();
     }
 
@@ -276,32 +174,18 @@ private:
     {
         if (!fVoiceManager)
             return;
-        const float rate = isMono(fValues[kParamVoiceMode]) ? fValues[kParamSlewRate] : 1e-8f;
+        const float rate = isMono(fValues[kParamVoiceMode]) ? fValues[kParamGlide] : 1e-8f;
         fVoiceManager->setParameter(slew1RiseAddress, rate);
         fVoiceManager->setParameter(slew1FallAddress, rate);
     }
 
-    // Route one param to the engine: gain is applied in run(); routing params change connections;
-    // everything else is a module param.
+    // Route one param to the engine: globals are handled here; everything else is a module param.
     void applyParam(uint32_t index, float value)
     {
-        if (index == kParamSpread || !fVoiceManager)
-            return; // spread is applied on the output bus in run()
-        if (index == kParamSlewRate)  { applySlew(); return; }
+        if (!fVoiceManager)
+            return;
+        if (index == kParamGlide)     { applySlew();          return; }
         if (index == kParamVoiceMode) { applyVoiceMode(value); return; }
-        if (index == kParamSinPitch)
-        {
-            // Interval dropdown → semitone offset on the sine osc (the master).
-            static constexpr float kSinIntervals[] = { -36, -24, -12, 0, 7, 12, 19 };
-            int i = static_cast<int>(value + 0.5f);
-            if (i < 0) i = 0; else if (i > 6) i = 6;
-            fVoiceManager->setParameter(
-                MODULE_PARAM_ADDRESS(ModuleParamKindSinOsc, ModuleInstance1, SinOscParamItemPitch),
-                kSinIntervals[i]);
-            return;
-        }
-        if (applyModRouting(index, value))
-            return;
         const AUParameterAddress a = vmAddress(index);
         if (a != 0)
             fVoiceManager->setParameter(a, value);
@@ -319,8 +203,7 @@ private:
         setConfig(MIDIParamItemVoiceStealAlgorithm, VoiceStealAlgorithmOldest);
         setConfig(MIDIParamItemFreeRun, 0);
 
-        // Push every non-gain param so the engine matches the exposed parameter values
-        // (module params + the mod-routing connections).
+        // Push every param so the engine matches the exposed parameter values.
         for (uint32_t i = 0; i < kParamCount; ++i)
             applyParam(i, fValues[i]);
     }
@@ -342,21 +225,13 @@ private:
     }
 
     // Render [start,end) by chunking to the module block size; VoiceManager zeroes + sums voices.
-    // Applies a mid/side stereo-width (Spread): width 1 = unchanged, 0 = mono. Output level is set
-    // per-oscillator in the engine (the Amp Sine/IFS levels), so there is no master gain here.
-    void renderSegment(float* outL, float* outR, uint32_t start, uint32_t end, float width)
+    // Stereo width comes from the ModalBank's own Spread param, so there is no output-bus M/S here.
+    void renderSegment(float* outL, float* outR, uint32_t start, uint32_t end)
     {
         for (uint32_t p = start; p < end;)
         {
             const uint32_t chunk = std::min<uint32_t>(end - p, MODULE_BUFF_SIZE);
             fVoiceManager->process(chunk, outL + p, outR + p);
-            for (uint32_t i = p; i < p + chunk; ++i)
-            {
-                const float l = outL[i], r = outR[i];
-                const float mid = 0.5f * (l + r), side = 0.5f * (l - r) * width;
-                outL[i] = mid + side;
-                outR[i] = mid - side;
-            }
             p += chunk;
         }
     }
