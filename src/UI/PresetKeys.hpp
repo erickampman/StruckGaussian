@@ -6,7 +6,7 @@
 #ifndef IFSYNTH_PRESETKEYS_HPP
 #define IFSYNTH_PRESETKEYS_HPP
 
-#include "IFSynthParams.h"
+#include "StruckSynthParams.h"
 
 namespace ifsynth {
 

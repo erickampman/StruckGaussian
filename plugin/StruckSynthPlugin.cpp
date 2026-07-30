@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "IFSynthParams.h"
+#include "StruckSynthParams.h"
 
 #include "ParamAddressMacros.h"
 #include "VoiceManager.hpp"
@@ -36,13 +36,13 @@ public:
 
 protected:
     /* -- information ------------------------------------------------------ */
-    const char* getLabel()       const override { return "IFSynth"; }
+    const char* getLabel()       const override { return "StruckSynth"; }
     const char* getDescription() const override
     {
-        return "A polyphonic synth built on the PolygraphModular voice engine.";
+        return "A modal-synthesis (struck-resonator) instrument built on the PolygraphModular voice engine.";
     }
-    const char* getMaker()    const override { return "example"; }
-    const char* getHomePage() const override { return "https://example.com/ifsynth"; }
+    const char* getMaker()    const override { return "Unlikelyware"; }
+    const char* getHomePage() const override { return "https://unlikelyware.com/strucksynth"; }
     const char* getLicense()  const override { return "MIT"; }
     uint32_t    getVersion()  const override { return d_version(0, 3, 0); }
     int64_t     getUniqueId() const override { return d_cconst('I', 'F', 'S', 'y'); }

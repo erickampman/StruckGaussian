@@ -6,13 +6,13 @@
 #ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
-#define DISTRHO_PLUGIN_BRAND       "example"
-#define DISTRHO_PLUGIN_NAME        "IFSynth"
-#define DISTRHO_PLUGIN_URI         "https://example.com/ifsynth"
-#define DISTRHO_PLUGIN_CLAP_ID     "com.example.ifsynth"
+#define DISTRHO_PLUGIN_BRAND       "Unlikelyware"
+#define DISTRHO_PLUGIN_NAME        "StruckSynth"
+#define DISTRHO_PLUGIN_URI         "https://unlikelyware.com/strucksynth"
+#define DISTRHO_PLUGIN_CLAP_ID     "com.unlikelyware.strucksynth"
 #define DISTRHO_PLUGIN_CLAP_FEATURES "instrument", "synthesizer", "stereo"
-#define DISTRHO_PLUGIN_BRAND_ID    Exmp
-#define DISTRHO_PLUGIN_UNIQUE_ID   IFSy
+#define DISTRHO_PLUGIN_BRAND_ID    Unlk
+#define DISTRHO_PLUGIN_UNIQUE_ID   Strk
 
 #define DISTRHO_PLUGIN_HAS_UI          1
 #define DISTRHO_PLUGIN_IS_SYNTH        1   // note input + CLAP "instrument"; enables MIDI in

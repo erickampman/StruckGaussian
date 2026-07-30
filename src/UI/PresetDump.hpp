@@ -8,7 +8,7 @@
 
 #if IFSYNTH_PRESET_DUMP
 
-#include "IFSynthParams.h"
+#include "StruckSynthParams.h"
 #include "PresetKeys.hpp"
 
 #include <cmath>

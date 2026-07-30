@@ -22,7 +22,7 @@
 #include "GroupBox.hpp"
 #include "IFSControl.hpp"
 #include "IFSEnvControl.hpp"
-#include "IFSynthParams.h"
+#include "StruckSynthParams.h"
 #include "Knob.hpp"
 #include "Logo.hpp"
 #include "PopupMenu.hpp"

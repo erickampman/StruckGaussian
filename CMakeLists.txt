@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 
 # C is needed for DPF's pugl / dgl sources.
-project(IFSynth VERSION 0.3.0 LANGUAGES C CXX)
+project(StruckSynth VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)          # PM framework uses std::numbers / std::span
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,32 +80,32 @@ add_custom_target(generate_resources DEPENDS "${IFSYNTH_RESOURCES_HPP}" "${IFSYN
 # subclasses; the DSP side drives pm_framework's VoiceManager. The four ADSR knobs route to
 # the envelope module live.
 add_subdirectory(dpf)
-dpf_add_plugin(IFSynth
+dpf_add_plugin(StruckSynth
     TARGETS clap
     UI_TYPE opengl
     FILES_DSP
-        plugin/IFSynthPlugin.cpp
+        plugin/StruckSynthPlugin.cpp
     FILES_UI
-        src/UI/IFSynthUI.cpp)
-# So both DSP and UI sources find DistrhoPluginInfo.h + IFSynthParams.h.
-target_include_directories(IFSynth PUBLIC plugin)
+        src/UI/StruckSynthUI.cpp)
+# So both DSP and UI sources find DistrhoPluginInfo.h + StruckSynthParams.h.
+target_include_directories(StruckSynth PUBLIC plugin)
 # The DSP side pulls in the vendored engine.
-target_link_libraries(IFSynth-dsp PUBLIC pm_framework)
+target_link_libraries(StruckSynth-dsp PUBLIC pm_framework)
 # The UI's IFSControl pad draws the true DSP waveform via IFSCore (computeIFSWavetable), so it
 # links pm_framework too. Static-lib symbol extraction dedups it in the final .clap.
-target_link_libraries(IFSynth-ui PUBLIC pm_framework)
-# Generated preset array (see the codegen step above) — must exist before IFSynthUI.cpp compiles.
-add_dependencies(IFSynth-ui generate_presets)
-target_include_directories(IFSynth-ui PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_link_libraries(StruckSynth-ui PUBLIC pm_framework)
+# Generated preset array (see the codegen step above) — must exist before StruckSynthUI.cpp compiles.
+add_dependencies(StruckSynth-ui generate_presets)
+target_include_directories(StruckSynth-ui PRIVATE "${CMAKE_BINARY_DIR}/generated")
 # Embedded logo bytes — the generated .cpp defines the data the .hpp declares.
-add_dependencies(IFSynth-ui generate_resources)
-target_sources(IFSynth-ui PRIVATE "${IFSYNTH_RESOURCES_CPP}")
+add_dependencies(StruckSynth-ui generate_resources)
+target_sources(StruckSynth-ui PRIVATE "${IFSYNTH_RESOURCES_CPP}")
 # DPF may default to an older standard; the DSP glue includes C++20 framework headers.
-set_target_properties(IFSynth-dsp IFSynth-ui PROPERTIES
+set_target_properties(StruckSynth-dsp StruckSynth-ui PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 # Dev-only JSON patch dumper (keystroke → file); compiled out of release builds.
 if(IFSYNTH_PRESET_DUMP)
-    target_compile_definitions(IFSynth-ui PRIVATE IFSYNTH_PRESET_DUMP=1)
+    target_compile_definitions(StruckSynth-ui PRIVATE IFSYNTH_PRESET_DUMP=1)
 endif()
 
 # --- install: symlink the built .clap into the user CLAP dir ---------------
@@ -119,10 +119,10 @@ endif()
 add_custom_target(install-clap
     COMMAND ${CMAKE_COMMAND} -E make_directory "${IFSYNTH_CLAP_DIR}"
     COMMAND ${CMAKE_COMMAND} -E create_symlink
-        "${CMAKE_BINARY_DIR}/bin/IFSynth.clap"
-        "${IFSYNTH_CLAP_DIR}/IFSynth.clap"
-    DEPENDS IFSynth-clap
-    COMMENT "Symlinking IFSynth.clap into ${IFSYNTH_CLAP_DIR}")
+        "${CMAKE_BINARY_DIR}/bin/StruckSynth.clap"
+        "${IFSYNTH_CLAP_DIR}/StruckSynth.clap"
+    DEPENDS StruckSynth-clap
+    COMMENT "Symlinking StruckSynth.clap into ${IFSYNTH_CLAP_DIR}")
 
 # --- self-tests (the framework; headless, no DAW) --------------------------
 add_executable(pm-selftest test/pm_selftest.cpp)
