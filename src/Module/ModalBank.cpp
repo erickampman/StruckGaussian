@@ -52,7 +52,6 @@ ModalBank::ModalBank()
     , mDampBellWidth(0.4f)
     , mStrikePos(0.25f)
     , mSpread(0.0f)
-    , mMix(1.0f)
     , mDirty(true)
 {
     reset();
@@ -157,12 +156,6 @@ void ModalBank::setDampBellWidth(float octaves) {
 
 void ModalBank::prepare() {
     recomputeIfDirty();
-}
-
-void ModalBank::setMix(float m) {
-    // No dirty flag: mix is applied per-sample at the output and does not
-    // affect any coefficient.
-    mMix = clampf(m, 0.0f, 1.0f);
 }
 
 float ModalBank::modeFrequency(int i) const {
@@ -302,9 +295,7 @@ void ModalBank::processBlock(const float* excitation, float* outL, float* outR, 
         return;
     }
 
-    const int   modes = mModeCount;
-    const float wet   = mMix;
-    const float dry   = 1.0f - mMix;
+    const int modes = mModeCount;
 
     for (int s = 0; s < n; ++s) {
         const float x = excitation ? excitation[s] : 0.0f;
@@ -324,8 +315,8 @@ void ModalBank::processBlock(const float* excitation, float* outL, float* outR, 
             accR += y * mPanR[i];
         }
 
-        outL[s] = accL * wet + x * dry;
-        outR[s] = accR * wet + x * dry;
+        outL[s] = accL;
+        outR[s] = accR;
     }
 
     flushDenormals();

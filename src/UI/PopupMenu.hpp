@@ -39,13 +39,20 @@ public:
     {
         fTag = tag; fItems = items; fCurrent = current; fHover = -1;
         const int h = static_cast<int>(items.size()) * fRowH + 2 * fPad;
+        // Width: at least the anchor box, but widened to fit the longest label — menus like the
+        // 26 materials have items far longer than the compact box that opens them.
+        const float fs = kFontBase * fUiScale;
+        size_t maxChars = 1;
+        for (const auto& it : items) maxChars = std::max(maxChars, it.size());
+        const int contentW = static_cast<int>(maxChars * fs * 0.66f + 34 * fUiScale);
+        const int useW = std::max(width, contentW);
         int y = boxBottom;
         if (y + h > windowH)   // not enough room below → open above the box
             y = boxTop - h;
         if (y < 0)             // last-resort clamp for a very short window
             y = 0;
         setAbsolutePos(x, y);
-        setSize(static_cast<uint>(width), static_cast<uint>(h));
+        setSize(static_cast<uint>(useW), static_cast<uint>(h));
         toFront();
         show();
         repaint();
@@ -57,7 +64,7 @@ public:
     void setUiScale(float s)
     {
         fUiScale = s;
-        fRowH = static_cast<int>(24 * s);
+        fRowH = static_cast<int>(25 * s);
         fPad  = static_cast<int>(4 * s);
     }
 
@@ -81,7 +88,7 @@ protected:
             {
                 fontFace(NANOVG_DEJAVU_SANS_TTF);
                 textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
-                fontSize(13.0f * fUiScale);
+                fontSize(kFontBase * fUiScale);
                 fillColor(i == fCurrent ? Color(120, 210, 225) : Color(226, 230, 236));
                 text(12.0f * fUiScale, ry + fRowH * 0.5f, fItems[i].c_str(), nullptr);
             }
@@ -130,6 +137,7 @@ private:
     bool                     fHasFont = false;
     float                    fUiScale = 1.0f;
 
+    static constexpr float   kFontBase = 14.5f; // shared by openFor width calc + onNanoDisplay
     int fRowH = 24, fPad = 4;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupMenu)

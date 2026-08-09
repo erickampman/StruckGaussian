@@ -15,8 +15,10 @@
 #include <vector>
 
 #include "Dropdown.hpp"
+#include "EmbeddedResources.hpp" // build-time codegen: Unlikelyware logo PNG bytes
 #include "GroupBox.hpp"
 #include "Knob.hpp"
+#include "Logo.hpp"
 #include "PopupMenu.hpp"
 
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
@@ -33,6 +35,7 @@ using DGL_NAMESPACE::Color;
 using DGL_NAMESPACE::Dropdown;
 using DGL_NAMESPACE::GroupBox;
 using DGL_NAMESPACE::Knob;
+using DGL_NAMESPACE::Logo;
 using DGL_NAMESPACE::PopupMenu;
 
 // Category accent palette (struck-instrument scheme): global=steel, strike=amber, object=green,
@@ -58,10 +61,12 @@ public:
 
     // Push the modal params the visual depends on, then recompute the mode layout.
     void update(int material, int modes, int stretchIdx, float pitchOct,
-                float decayT60, float dampTilt, float brightness)
+                float decayT60, float dampTilt, float brightness,
+                float bellAmt, float bellCtr, float bellWid)
     {
         fMaterial = material; fModes = modes; fStretchIdx = stretchIdx; fPitch = pitchOct;
         fDecayT60 = decayT60; fDampTilt = dampTilt; fBrightness = brightness;
+        fBellAmt = bellAmt; fBellCtr = bellCtr; fBellWid = bellWid;
         recompute();
         repaint();
     }
@@ -115,6 +120,9 @@ private:
         fBank.setDecayT60(fDecayT60);
         fBank.setDampTilt(fDampTilt);
         fBank.setBrightness(fBrightness);
+        fBank.setDampBellAmount(fBellAmt);
+        fBank.setDampBellCentre(fBellCtr);
+        fBank.setDampBellWidth(fBellWid);
         selectMaterial(fMaterial);
         fBank.prepare();
 
@@ -155,6 +163,7 @@ private:
 
     int   fMaterial = 1, fModes = 64, fStretchIdx = 9;
     float fPitch = 0.0f, fDecayT60 = 2.0f, fDampTilt = 0.9f, fBrightness = 0.0f;
+    float fBellAmt = 0.0f, fBellCtr = 2.0f, fBellWid = 0.4f;
 
     int   fCount = 0;
     float fFreq[ModalBank::kMaxModes] = {};
@@ -174,19 +183,21 @@ public:
     StruckSynthUI()
         : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT)
     {
-        setGeometryConstraints(720, 576, true, false); // lock the 900:720 design ratio
+        setGeometryConstraints(784, 576, true, false); // lock the 980:720 design ratio (0.8x min)
         fHasFont = loadSharedResources();               // DPF's bundled DejaVu Sans for the title
 
         for (uint32_t i = 0; i < kParamCount; ++i)
             fValues[i] = kParams[i].def;
 
         fSpectrum = std::make_unique<ModalSpectrum>(this);
+        fLogo = std::make_unique<Logo>(this, EmbeddedResources::Unlikelyware_Final_ColorData,
+                                       EmbeddedResources::Unlikelyware_Final_ColorDataSize);
 
         fGlobalGroup = makeGroup("Global", colGlobal());
         fStrikeGroup = makeGroup("Strike", colStrike());
         fObjectGroup = makeGroup("Object", colObject());
         fDecayGroup  = makeGroup("Decay",  colDecay());
-        fOutputGroup = makeGroup("Timbre & Output", colOutput());
+        fOutputGroup = makeGroup("Timbre", colOutput());
 
         // Build each param control into its panel, in panel order.
         for (uint32_t i = 0; i < kParamCount; ++i)
@@ -271,17 +282,17 @@ protected:
         const float w = getWidth(), h = getHeight();
         beginPath(); rect(0, 0, w, h); fillColor(Color(22, 24, 29)); fill();
 
-        // Title (top-left of the header strip).
+        // Title, just to the right of the brand logo (fTitleX set in layout()).
         if (fHasFont)
         {
             const float s = w / 900.0f;
             fontFace(NANOVG_DEJAVU_SANS_TTF);
+            textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
             fontSize(22 * s);
             fillColor(Color(224, 190, 150));
-            textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
-            text(16 * s, 22 * s, "StruckSynth", nullptr);
+            text(fTitleX, 20 * s, "StruckSynth", nullptr);
             fillColor(Color(150, 154, 162)); fontSize(12 * s);
-            text(150 * s, 24 * s, "modal synthesis  ·  Unlikelyware", nullptr);
+            text(fTitleX + 132 * s, 22 * s, "modal synthesis", nullptr);
         }
     }
     void onResize(const ResizeEvent& ev) override { UI::onResize(ev); layout(); }
@@ -291,36 +302,51 @@ private:
     {
         const int W = getWidth(), H = getHeight();
         const float s = W / 900.0f;
-        const int M = static_cast<int>(16 * s);
-        const int headerH = static_cast<int>(40 * s);
+        const int M   = static_cast<int>(16 * s);
+        const int hdr = static_cast<int>(38 * s);
 
-        // Spectrum spans the width under the header.
-        const int specY = headerH;
-        const int specH = static_cast<int>(150 * s);
-        fSpectrum->setAbsolutePos(M, specY);
+        // Brand logo top-left; the title text starts just to its right (computed for onNanoDisplay).
+        const int logoH = static_cast<int>(24 * s);
+        fLogo->setHeightPreservingAspect(static_cast<float>(logoH));
+        fLogo->setAbsolutePos(M, static_cast<int>(8 * s));
+        fTitleX = M + static_cast<int>(fLogo->getWidth()) + static_cast<int>(12 * s);
+        fMenu->setUiScale(s); // scale the popup font/rows with the window
+
+        // Spectrum: full width, short strip under the header (bars only need a little height).
+        const int specH = static_cast<int>(88 * s);
+        fSpectrum->setAbsolutePos(M, hdr);
         fSpectrum->setSize(W - 2 * M, specH);
 
-        // Five stacked full-width panels.
-        GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
-                                fDecayGroup.get(), fOutputGroup.get() };
-        int py = specY + specH + static_cast<int>(12 * s);
-        const int gap = static_cast<int>(8 * s);
-        const int panelH = (H - py - M - 4 * gap) / 5;
-        const float knobD = std::min(60.0f * s, panelH * 0.52f);
+        // Panel grid: two columns × three rows, so each row is tall enough for large knobs.
+        // Row 2 holds the small Output panel, centred (its two flanks stay empty but symmetric).
+        const int gap   = static_cast<int>(10 * s);
+        const int gridY = hdr + specH + static_cast<int>(10 * s);
+        const int gridH = H - gridY - M;
+        const int rowH  = (gridH - 2 * gap) / 3;
+        const int colW  = (W - 2 * M - gap) / 2;
+        const int col0  = M, col1 = M + colW + gap;
+        const int row0  = gridY, row1 = gridY + rowH + gap, row2 = gridY + 2 * (rowH + gap);
 
-        for (GroupBox* g : panels)
-        {
+        auto place = [&](GroupBox* g, int x, int y, int w) {
             g->setUiScale(s);
-            g->setAbsolutePos(M, py);
-            g->setSize(W - 2 * M, panelH);
-            py += panelH + gap;
-        }
+            g->setAbsolutePos(x, y);
+            g->setSize(w, rowH);
+        };
+        place(fGlobalGroup.get(), col0, row0, colW);
+        place(fStrikeGroup.get(), col1, row0, colW);
+        place(fObjectGroup.get(), col0, row1, colW);
+        place(fDecayGroup.get(),  col1, row1, colW);
+        place(fOutputGroup.get(), (W - colW) / 2, row2, colW); // centred half-width
+
         // Size the child controls, then let each box arrange its row.
+        const float knobD = std::min(74.0f * s, rowH * 0.5f);
         for (uint32_t i = 0; i < kParamCount; ++i)
         {
             if (fKnobs[i])     fKnobs[i]->setDiameter(knobD, s);
-            if (fDropdowns[i]) { fDropdowns[i]->setUiScale(s); fDropdowns[i]->setSize(static_cast<int>(130 * s), static_cast<int>(26 * s)); }
+            if (fDropdowns[i]) { fDropdowns[i]->setUiScale(s); fDropdowns[i]->setSize(static_cast<int>(120 * s), static_cast<int>(26 * s)); }
         }
+        GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
+                                fDecayGroup.get(), fOutputGroup.get() };
         for (GroupBox* g : panels) g->relayout();
     }
 
@@ -397,7 +423,8 @@ private:
     {
         return i == kParamMaterial || i == kParamModeCount || i == kParamStretch
             || i == kParamPitch || i == kParamDecayT60 || i == kParamDampTilt
-            || i == kParamBrightness;
+            || i == kParamBrightness || i == kParamDampBellAmount
+            || i == kParamDampBellCentre || i == kParamDampBellWidth;
     }
 
     void pushSpectrum()
@@ -406,7 +433,9 @@ private:
                           static_cast<int>(fValues[kParamModeCount] + 0.5f),
                           static_cast<int>(fValues[kParamStretch] + 0.5f),
                           fValues[kParamPitch], fValues[kParamDecayT60],
-                          fValues[kParamDampTilt], fValues[kParamBrightness]);
+                          fValues[kParamDampTilt], fValues[kParamBrightness],
+                          fValues[kParamDampBellAmount], fValues[kParamDampBellCentre],
+                          fValues[kParamDampBellWidth]);
     }
 
     static std::function<std::string(float)> formatterFor(uint32_t i)
@@ -430,8 +459,10 @@ private:
     std::unique_ptr<Knob>          fKnobs[kParamCount];
     std::unique_ptr<Dropdown>      fDropdowns[kParamCount];
     std::unique_ptr<PopupMenu>     fMenu;
+    std::unique_ptr<Logo>          fLogo;
     float                          fValues[kParamCount];
     bool                           fHasFont = false;
+    int                            fTitleX = 16;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StruckSynthUI)
 };

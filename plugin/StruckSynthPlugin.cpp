@@ -145,8 +145,6 @@ private:
         // ModalBank: timbre
         case kParamStrikePosition: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikePosition);
         case kParamBrightness:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemBrightness);
-        // ModalBank: output
-        case kParamMix:            return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemMix);
         default:                   return 0;
         }
     }

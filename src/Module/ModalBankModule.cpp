@@ -149,7 +149,6 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
 
     // --- output ------------------------------------------------------------
     bank.setSpread(module->getParamValue(ModalBankParamItemSpread));
-    bank.setMix(module->getParamValue(ModalBankParamItemMix));
 
     // Excitation. If nothing is patched we still process with a null exciter so
     // a previously struck bank keeps ringing down — the common case. The core

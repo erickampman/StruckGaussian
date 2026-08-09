@@ -65,7 +65,7 @@ protected:
             // Label sits in the reserved band above the box (always inside bounds).
             fontFace(NANOVG_DEJAVU_SANS_TTF);
             textAlign(ALIGN_CENTER | ALIGN_TOP);
-            fontSize(13.0f * fUiScale);
+            fontSize(14.0f * fUiScale);
             fillColor(Color(176, 182, 190));
             text(w * 0.5f, by - fLabelH + 1.0f, fLabel.c_str(), nullptr);
         }
@@ -77,7 +77,7 @@ protected:
         if (fHasFont && fIndex >= 0 && fIndex < static_cast<int>(fChoices.size()))
         {
             textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
-            fontSize(13.0f * fUiScale);
+            fontSize(14.0f * fUiScale);
             fillColor(Color(226, 230, 236));
             text(bx + 10.0f, by + bh * 0.5f, fChoices[fIndex].c_str(), nullptr);
         }

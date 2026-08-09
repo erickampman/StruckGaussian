@@ -34,8 +34,6 @@ enum ParamIndex {
    // --- ModalBank: timbre ---
    kParamStrikePosition,    // 0..1; 0.5 cancels even modes
    kParamBrightness,        // amplitude tilt across modes
-   // --- ModalBank: output ---
-   kParamMix,               // 1 = bank is the sound; <1 = resonator in a path
    kParamCount
 };
 
@@ -76,8 +74,6 @@ static constexpr ParamSpec kParams[kParamCount] = {
    // ModalBank: timbre
    {"Strike Pos", "strkPos",  "",    0.0f,   1.0f,   0.25f, false, false},
    {"Brightness", "bright",   "",    -1.0f,  1.0f,   0.0f,  false, false},
-   // ModalBank: output
-   {"Mix",        "mix",      "",    0.0f,   1.0f,   1.0f,  false, false},
 };
 
 // Material picker labels (order matches ModalBankMaterial in pm_params.h).

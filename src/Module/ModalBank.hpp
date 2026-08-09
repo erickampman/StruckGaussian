@@ -68,11 +68,6 @@ public:
     void setStrikePosition(float p);    // 0..1; 0.5 cancels even modes
     void setSpread(float s);            // 0 = mono, 1 = modes spread L/R
 
-    // Dry/wet. 1.0 (the default) is the struck-instrument case: the bank IS
-    // the sound. Below 1.0 it becomes a resonator sitting in a signal path,
-    // which is what the body-resonator and granular uses need.
-    void setMix(float m);
-
     // --- audio --------------------------------------------------------------
     // excitation may be null, meaning "no input this block" — the common case
     // for a bank ringing down. Requiring a buffer of zeroes for that would be
@@ -121,7 +116,6 @@ private:
     float  mDampBellWidth;
     float  mStrikePos;
     float  mSpread;
-    float  mMix;
 
     bool   mDirty;
 };
