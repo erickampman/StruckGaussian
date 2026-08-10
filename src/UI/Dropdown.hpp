@@ -38,7 +38,7 @@ public:
     {
         fUiScale = s;
         fBoxH   = static_cast<int>(26 * s);
-        fInset  = static_cast<int>(12 * s);
+        fInset  = static_cast<int>(5 * s);   // small gap so the box nearly fills its cell
         fLabelH = static_cast<int>(16 * s);
     }
 
@@ -65,7 +65,7 @@ protected:
             // Label sits in the reserved band above the box (always inside bounds).
             fontFace(NANOVG_DEJAVU_SANS_TTF);
             textAlign(ALIGN_CENTER | ALIGN_TOP);
-            fontSize(14.0f * fUiScale);
+            fontSize(13.0f * fUiScale);
             fillColor(Color(176, 182, 190));
             text(w * 0.5f, by - fLabelH + 1.0f, fLabel.c_str(), nullptr);
         }
@@ -77,13 +77,13 @@ protected:
         if (fHasFont && fIndex >= 0 && fIndex < static_cast<int>(fChoices.size()))
         {
             textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
-            fontSize(14.0f * fUiScale);
+            fontSize(13.0f * fUiScale);
             fillColor(Color(226, 230, 236));
-            text(bx + 10.0f, by + bh * 0.5f, fChoices[fIndex].c_str(), nullptr);
+            text(bx + 7.0f, by + bh * 0.5f, fChoices[fIndex].c_str(), nullptr);
         }
 
         // chevron
-        const float cx = bx + bw - 14.0f, cy = by + bh * 0.5f;
+        const float cx = bx + bw - 11.0f, cy = by + bh * 0.5f;
         beginPath(); moveTo(cx - 4, cy - 2); lineTo(cx + 4, cy - 2); lineTo(cx, cy + 3); closePath();
         fillColor(Color(150, 160, 172)); fill();
     }

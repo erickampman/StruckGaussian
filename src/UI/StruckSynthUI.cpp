@@ -183,7 +183,7 @@ public:
     StruckSynthUI()
         : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT)
     {
-        setGeometryConstraints(784, 576, true, false); // lock the 980:720 design ratio (0.8x min)
+        setGeometryConstraints(864, 512, true, false); // lock the 1080:640 design ratio (0.8x min)
         fHasFont = loadSharedResources();               // DPF's bundled DejaVu Sans for the title
 
         for (uint32_t i = 0; i < kParamCount; ++i)
@@ -301,49 +301,49 @@ private:
     void layout()
     {
         const int W = getWidth(), H = getHeight();
-        const float s = W / 900.0f;
+        const float s = W / 1080.0f;
         const int M   = static_cast<int>(16 * s);
         const int hdr = static_cast<int>(38 * s);
+        const int gap = static_cast<int>(10 * s);
 
-        // Brand logo top-left; the title text starts just to its right (computed for onNanoDisplay).
+        // Brand logo top-left; the title starts just to its right (used by onNanoDisplay).
         const int logoH = static_cast<int>(24 * s);
         fLogo->setHeightPreservingAspect(static_cast<float>(logoH));
         fLogo->setAbsolutePos(M, static_cast<int>(8 * s));
         fTitleX = M + static_cast<int>(fLogo->getWidth()) + static_cast<int>(12 * s);
-        fMenu->setUiScale(s); // scale the popup font/rows with the window
+        fMenu->setUiScale(s);
 
-        // Spectrum: full width, short strip under the header (bars only need a little height).
-        const int specH = static_cast<int>(88 * s);
-        fSpectrum->setAbsolutePos(M, hdr);
-        fSpectrum->setSize(W - 2 * M, specH);
-
-        // Panel grid: two columns × three rows, so each row is tall enough for large knobs.
-        // Row 2 holds the small Output panel, centred (its two flanks stay empty but symmetric).
-        const int gap   = static_cast<int>(10 * s);
-        const int gridY = hdr + specH + static_cast<int>(10 * s);
+        // 2 columns × 3 rows under the header. The spectrum takes the top-left cell (where Global
+        // used to be); Global and Timbre move to the bottom row. Strike top-right, Object | Decay
+        // in the middle.
+        const int gridY = hdr;
         const int gridH = H - gridY - M;
         const int rowH  = (gridH - 2 * gap) / 3;
         const int colW  = (W - 2 * M - gap) / 2;
         const int col0  = M, col1 = M + colW + gap;
         const int row0  = gridY, row1 = gridY + rowH + gap, row2 = gridY + 2 * (rowH + gap);
 
-        auto place = [&](GroupBox* g, int x, int y, int w) {
+        fSpectrum->setAbsolutePos(col0, row0);
+        fSpectrum->setSize(colW, rowH);
+
+        auto place = [&](GroupBox* g, int x, int y) {
             g->setUiScale(s);
             g->setAbsolutePos(x, y);
-            g->setSize(w, rowH);
+            g->setSize(colW, rowH);
         };
-        place(fGlobalGroup.get(), col0, row0, colW);
-        place(fStrikeGroup.get(), col1, row0, colW);
-        place(fObjectGroup.get(), col0, row1, colW);
-        place(fDecayGroup.get(),  col1, row1, colW);
-        place(fOutputGroup.get(), (W - colW) / 2, row2, colW); // centred half-width
+        place(fStrikeGroup.get(), col1, row0);
+        place(fObjectGroup.get(), col0, row1);
+        place(fDecayGroup.get(),  col1, row1);
+        place(fGlobalGroup.get(), col0, row2); // Global → bottom-left
+        place(fOutputGroup.get(), col1, row2); // Timbre → bottom-right
 
-        // Size the child controls, then let each box arrange its row.
-        const float knobD = std::min(74.0f * s, rowH * 0.5f);
+        // Knob diameter bounded by the row height (room for label + value) and, via relayout, the
+        // cell width. Dropdowns are sized to their cell by relayout(); we only set their scale.
+        const float knobD = std::min(74.0f * s, rowH * 0.44f);
         for (uint32_t i = 0; i < kParamCount; ++i)
         {
             if (fKnobs[i])     fKnobs[i]->setDiameter(knobD, s);
-            if (fDropdowns[i]) { fDropdowns[i]->setUiScale(s); fDropdowns[i]->setSize(static_cast<int>(120 * s), static_cast<int>(26 * s)); }
+            if (fDropdowns[i]) fDropdowns[i]->setUiScale(s);
         }
         GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
                                 fDecayGroup.get(), fOutputGroup.get() };
@@ -408,7 +408,7 @@ private:
         {
         case kParamVoiceMode:  return { "Mono", "Poly" };
         case kParamStrikeType: return { "Mallet", "Noise" };
-        case kParamContactMode:return { "Note-Rel", "Wall-Clock" };
+        case kParamContactMode:return { "Note-Rel", "Wall-Clk" };
         case kParamMaterial:
         {
             std::vector<std::string> v;
