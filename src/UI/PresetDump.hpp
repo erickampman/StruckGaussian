@@ -1,12 +1,14 @@
 // PresetDump.hpp — DEV-ONLY. Writes the current patch as module-nested JSON (PM-style) to a
-// timestamped file in $HOME. Compiled in only when IFSYNTH_PRESET_DUMP=1 (see CMake option); the
-// UI triggers it on a keystroke. Uses the kPresetKeys mapping (module-instance, item pair per
-// param) from PresetKeys.hpp, shared with the always-on preset loader.
+// timestamped file in $HOME. Compiled in only when STRUCKSYNTH_PRESET_DUMP=1 (see CMake option); the
+// UI triggers it on a keystroke. Uses the kPresetKeys mapping (module, item pair per param) from
+// PresetKeys.hpp, shared with the always-on preset loader. Author new presets by dialing in a
+// sound, dumping, then moving the JSON into Presets/ (rename it — the file stem or meta.name
+// becomes the preset name) and rebuilding.
 
-#ifndef IFSYNTH_PRESETDUMP_HPP
-#define IFSYNTH_PRESETDUMP_HPP
+#ifndef STRUCKSYNTH_PRESETDUMP_HPP
+#define STRUCKSYNTH_PRESETDUMP_HPP
 
-#if IFSYNTH_PRESET_DUMP
+#if STRUCKSYNTH_PRESET_DUMP
 
 #include "StruckSynthParams.h"
 #include "PresetKeys.hpp"
@@ -19,12 +21,11 @@
 #include <ctime>
 #include <string>
 
-namespace ifsynth {
+namespace strucksynth {
 
-// Emit modules in this order (signal-flow-ish); every module in kPresetKeys must appear here.
+// Emit modules in this order; every module in kPresetKeys must appear here.
 static constexpr const char* kPresetModuleOrder[] = {
-   "Global", "SinOsc1", "IFSOsc1", "LPF1", "IFSEnv1", "IFSEnv2", "IFSLFO1", "IFSLFO2",
-   "CVMixer1", "CVMixer2",
+   "Global", "Strike", "ModalBank",
 };
 
 // Build the module-nested JSON for `values` (kParamCount entries). Values are stringified like PM
@@ -37,11 +38,11 @@ inline std::string buildPresetJson(const float* values, const char* name = "Unti
 
    std::string j;
    j += "{\n";
-   j += "  \"app\": { \"name\": \"IFSynth\", \"version\": \"0.4.0\" },\n";
-   j += "  \"plugin\": { \"format\": \"clap\", \"id\": \"com.example.ifsynth\" },\n";
+   j += "  \"app\": { \"name\": \"StruckSynth\", \"version\": \"1.0.0\" },\n";
+   j += "  \"plugin\": { \"format\": \"clap\", \"id\": \"com.unlikelyware.strucksynth\" },\n";
    j += "  \"meta\": { \"author\": \"\", \"createdAt\": \"" + std::string(iso)
         + "\", \"name\": \"" + name + "\" },\n";
-   j += "  \"schema\": \"ifsynth.preset\",\n";
+   j += "  \"schema\": \"strucksynth.preset\",\n";
    j += "  \"schemaVersion\": 1,\n";
    j += "  \"state\": {\n";
    j += "    \"parameterState\": {\n";
@@ -75,12 +76,12 @@ inline std::string buildPresetJson(const float* values, const char* name = "Unti
    return j;
 }
 
-// Write the patch to $HOME/ifsynth-preset-<epoch>.json. Returns the path, or "" on failure.
+// Write the patch to $HOME/strucksynth-preset-<epoch>.json. Returns the path, or "" on failure.
 inline std::string dumpPresetToFile(const float* values)
 {
    const std::string json = buildPresetJson(values);
    const char* home = std::getenv("HOME");
-   std::string path = std::string(home ? home : ".") + "/ifsynth-preset-"
+   std::string path = std::string(home ? home : ".") + "/strucksynth-preset-"
                     + std::to_string(static_cast<long long>(std::time(nullptr))) + ".json";
    FILE* f = std::fopen(path.c_str(), "w");
    if (f == nullptr)
@@ -90,7 +91,7 @@ inline std::string dumpPresetToFile(const float* values)
    return path;
 }
 
-} // namespace ifsynth
+} // namespace strucksynth
 
-#endif // IFSYNTH_PRESET_DUMP
-#endif // IFSYNTH_PRESETDUMP_HPP
+#endif // STRUCKSYNTH_PRESET_DUMP
+#endif // STRUCKSYNTH_PRESETDUMP_HPP

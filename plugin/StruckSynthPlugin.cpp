@@ -23,12 +23,12 @@
 
 START_NAMESPACE_DISTRHO
 
-using namespace ifsynth;
+using namespace strucksynth;
 
-class IFSynthPlugin : public Plugin
+class StruckSynthPlugin : public Plugin
 {
 public:
-    IFSynthPlugin()
+    StruckSynthPlugin()
         : Plugin(kParamCount, 0, 0) // params, programs, states
     {
         for (uint32_t i = 0; i < kParamCount; ++i)
@@ -234,12 +234,12 @@ private:
         }
     }
 
-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(IFSynthPlugin)
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StruckSynthPlugin)
 };
 
 Plugin* createPlugin()
 {
-    return new IFSynthPlugin();
+    return new StruckSynthPlugin();
 }
 
 END_NAMESPACE_DISTRHO

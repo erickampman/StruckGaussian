@@ -16,10 +16,13 @@
 
 #include "Dropdown.hpp"
 #include "EmbeddedResources.hpp" // build-time codegen: Unlikelyware logo PNG bytes
+#include "GeneratedPresets.h"     // build-time codegen from Presets/*.json (see tools/gen_presets.py)
 #include "GroupBox.hpp"
 #include "Knob.hpp"
 #include "Logo.hpp"
 #include "PopupMenu.hpp"
+#include "PresetKeys.hpp"         // param -> preset-JSON key map, shared with the dumper
+#include "PresetDump.hpp"         // dev-only JSON patch dumper (no-op unless STRUCKSYNTH_PRESET_DUMP=1)
 
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
 #include "ModalGenerators.hpp"  // procedural mode series
@@ -29,7 +32,7 @@
 
 START_NAMESPACE_DISTRHO
 
-using namespace ifsynth;  // params (kParams, ParamIndex, kMaterialNames)
+using namespace strucksynth;  // params (kParams, ParamIndex, kMaterialNames)
 
 using DGL_NAMESPACE::Color;
 using DGL_NAMESPACE::Dropdown;
@@ -228,6 +231,20 @@ public:
             }
         }
 
+        // Preset selector: applies to the whole patch, so it's parented to the UI (like fMenu)
+        // and sits in the header strip, not in a GroupBox. Shares the generic Dropdown/PopupMenu
+        // plumbing every other dropdown uses; menuSelected() tells it apart via kPresetDropdownId.
+        fPresetDropdown = std::make_unique<Dropdown>(this, this);
+        fPresetDropdown->setId(kPresetDropdownId);
+        fPresetDropdown->setLabel("Preset");
+        {
+            std::vector<std::string> names;
+            for (int i = 0; i < kPresetCount; ++i) names.push_back(kPresets[i].name);
+            fPresetDropdown->setChoices(names);
+        }
+        fPresetDropdown->setPlaceholder("--");
+        fPresetDropdown->setIndex(-1); // no preset selected until the user picks one
+
         fMenu = std::make_unique<PopupMenu>(this, this); // created last → draws on top
 
         pushSpectrum();
@@ -267,6 +284,7 @@ protected:
     void menuSelected(PopupMenu* menu, int index) override
     {
         const uint32_t id = menu->tag();
+        if (id == kPresetDropdownId) { applyPreset(index); return; }
         if (id >= kParamCount) return;
         editParameter(id, true);
         setParameterValue(id, static_cast<float>(index));
@@ -274,6 +292,33 @@ protected:
         fValues[id] = static_cast<float>(index);
         if (fDropdowns[id]) fDropdowns[id]->setIndex(index);
         if (affectsSpectrum(id)) pushSpectrum();
+    }
+
+    // Apply every param the selected preset has a value for (looked up by "module.item" key via
+    // kPresetKeys — the same mapping PresetDump.hpp uses to write these files). Params the preset
+    // doesn't mention keep their current value. parameterChanged() already syncs the widget and
+    // the spectrum for each param, so it's reused here instead of duplicating that dispatch.
+    void applyPreset(int index)
+    {
+        if (index < 0 || index >= kPresetCount) return;
+        const PresetEntry& preset = kPresets[index];
+        for (uint32_t i = 0; i < kParamCount; ++i)
+        {
+            const std::string key = std::string(kPresetKeys[i].module) + "." + kPresetKeys[i].item;
+            for (int j = 0; j < preset.count; ++j)
+            {
+                if (key == preset.values[j].key)
+                {
+                    const float v = preset.values[j].value;
+                    editParameter(i, true);
+                    setParameterValue(i, v);
+                    editParameter(i, false);
+                    parameterChanged(i, v); // updates fValues[i], the widget, and the spectrum
+                    break;
+                }
+            }
+        }
+        if (fPresetDropdown) fPresetDropdown->setIndex(index);
     }
 
     /* -- drawing / layout ------------------------------------------------- */
@@ -297,13 +342,40 @@ protected:
     }
     void onResize(const ResizeEvent& ev) override { UI::onResize(ev); layout(); }
 
+    // Some Linux hosts (notably REAPER via pugl) don't apply the UI's initial size until the
+    // event loop starts pumping, so the window loads mis-sized (top gap, bottom row clipped)
+    // until a manual resize. Re-assert the default size once on the first idle tick to force
+    // the host to apply correct geometry, which drives onResize() -> layout().
+    void uiIdle() override
+    {
+        if (fInitialSizeNudged) return;
+        fInitialSizeNudged = true;
+        setSize(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT);
+    }
+
+#if STRUCKSYNTH_PRESET_DUMP
+    // Dev-only: press 'P' to write the current patch as JSON to $HOME (see PresetDump.hpp). fValues
+    // already mirrors every param, so it's the patch snapshot.
+    bool onKeyboard(const KeyboardEvent& ev) override
+    {
+        if (ev.press && ev.key == 'p')
+        {
+            const std::string path = dumpPresetToFile(fValues);
+            std::fprintf(stderr, "[StruckSynth] patch %s %s\n",
+                         path.empty() ? "dump FAILED" : "dumped to", path.c_str());
+            return true;
+        }
+        return UI::onKeyboard(ev);
+    }
+#endif
+
 private:
     void layout()
     {
         const int W = getWidth(), H = getHeight();
         const float s = W / 1080.0f;
         const int M   = static_cast<int>(16 * s);
-        const int hdr = static_cast<int>(38 * s);
+        const int hdr = static_cast<int>(52 * s); // header strip: brand + title left, preset right
         const int gap = static_cast<int>(10 * s);
 
         // Brand logo top-left; the title starts just to its right (used by onNanoDisplay).
@@ -312,6 +384,14 @@ private:
         fLogo->setAbsolutePos(M, static_cast<int>(8 * s));
         fTitleX = M + static_cast<int>(fLogo->getWidth()) + static_cast<int>(12 * s);
         fMenu->setUiScale(s);
+
+        // Preset selector, right-aligned in the header. Height fits the Dropdown's label + box
+        // (16 + 26 units, scaled); it seats within the 52-unit header.
+        const int presetW = static_cast<int>(200 * s);
+        const int presetH = static_cast<int>(44 * s);
+        fPresetDropdown->setUiScale(s);
+        fPresetDropdown->setSize(static_cast<uint>(presetW), static_cast<uint>(presetH));
+        fPresetDropdown->setAbsolutePos(W - M - presetW, static_cast<int>(4 * s));
 
         // 2 columns × 3 rows under the header. The spectrum takes the top-left cell (where Global
         // used to be); Global and Timbre move to the bottom row. Strike top-right, Object | Decay
@@ -460,9 +540,15 @@ private:
     std::unique_ptr<Dropdown>      fDropdowns[kParamCount];
     std::unique_ptr<PopupMenu>     fMenu;
     std::unique_ptr<Logo>          fLogo;
+    std::unique_ptr<Dropdown>      fPresetDropdown;
     float                          fValues[kParamCount];
     bool                           fHasFont = false;
+    bool                           fInitialSizeNudged = false;
     int                            fTitleX = 16;
+
+    // Sentinel id for the preset dropdown, past the real param range so menuSelected() can tell it
+    // apart from a per-param dropdown.
+    static constexpr uint32_t kPresetDropdownId = kParamCount;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StruckSynthUI)
 };

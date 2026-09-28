@@ -2,8 +2,8 @@
 // source image's own aspect ratio (never stretched). A click opens unlikelyware.com in the
 // system's default browser.
 
-#ifndef IFSYNTH_LOGO_HPP
-#define IFSYNTH_LOGO_HPP
+#ifndef STRUCKSYNTH_LOGO_HPP
+#define STRUCKSYNTH_LOGO_HPP
 
 #include "NanoVG.hpp"
 
@@ -84,4 +84,4 @@ private:
 
 END_NAMESPACE_DGL
 
-#endif // IFSYNTH_LOGO_HPP
+#endif // STRUCKSYNTH_LOGO_HPP

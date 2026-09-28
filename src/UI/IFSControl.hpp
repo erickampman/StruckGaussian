@@ -8,8 +8,8 @@
 // Y = junction), the endpoints are linked, and dragging up/down in a region sets its squash
 // (anchored at the center line, ±1). Reports changes to a Callback keyed by host param id.
 
-#ifndef IFSYNTH_IFSCONTROL_HPP
-#define IFSYNTH_IFSCONTROL_HPP
+#ifndef STRUCKSYNTH_IFSCONTROL_HPP
+#define STRUCKSYNTH_IFSCONTROL_HPP
 
 #include "NanoVG.hpp"
 
@@ -233,4 +233,4 @@ private:
 
 END_NAMESPACE_DGL
 
-#endif // IFSYNTH_IFSCONTROL_HPP
+#endif // STRUCKSYNTH_IFSCONTROL_HPP

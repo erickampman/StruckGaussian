@@ -6,8 +6,8 @@ project(StruckSynth VERSION 0.3.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)          # PM framework uses std::numbers / std::span
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(IFSYNTH_WERROR "Treat warnings as errors (framework + tests)" OFF)
-option(IFSYNTH_PRESET_DUMP "Dev-only: press 'P' in the UI to dump the patch as JSON to \$HOME" OFF)
+option(STRUCKSYNTH_WERROR "Treat warnings as errors (framework + tests)" OFF)
+option(STRUCKSYNTH_PRESET_DUMP "Dev-only: press 'P' in the UI to dump the patch as JSON to \$HOME" OFF)
 
 # --- PM framework port -----------------------------------------------------
 # Vendored PolygraphModular framework + our shim/MIDI layer, as a static lib. Compiled with
@@ -53,30 +53,30 @@ endif()
 # reconfiguring (CONFIGURE_DEPENDS re-globs on build, but a brand new file still needs `cmake -B
 # build -S .` rerun once to pick up the new match).
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-file(GLOB IFSYNTH_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Presets/*.json")
-set(IFSYNTH_GENERATED_PRESETS_H "${CMAKE_BINARY_DIR}/generated/GeneratedPresets.h")
+file(GLOB STRUCKSYNTH_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Presets/*.json")
+set(STRUCKSYNTH_GENERATED_PRESETS_H "${CMAKE_BINARY_DIR}/generated/GeneratedPresets.h")
 add_custom_command(
-    OUTPUT "${IFSYNTH_GENERATED_PRESETS_H}"
+    OUTPUT "${STRUCKSYNTH_GENERATED_PRESETS_H}"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/gen_presets.py"
-            ${IFSYNTH_PRESET_FILES} -o "${IFSYNTH_GENERATED_PRESETS_H}"
-    DEPENDS ${IFSYNTH_PRESET_FILES} "${CMAKE_SOURCE_DIR}/tools/gen_presets.py"
+            ${STRUCKSYNTH_PRESET_FILES} -o "${STRUCKSYNTH_GENERATED_PRESETS_H}"
+    DEPENDS ${STRUCKSYNTH_PRESET_FILES} "${CMAKE_SOURCE_DIR}/tools/gen_presets.py"
     COMMENT "Generating embedded presets from Presets/*.json")
-add_custom_target(generate_presets DEPENDS "${IFSYNTH_GENERATED_PRESETS_H}")
+add_custom_target(generate_presets DEPENDS "${STRUCKSYNTH_GENERATED_PRESETS_H}")
 
 # --- embedded resources: Resources/* compiled in as raw bytes ----------------------------
 # Uses DPF's own res2c.py (ships in the dpf/ submodule) to embed the logo PNG's raw file bytes;
 # NanoVG's createImageFromMemory() decodes it at UI-construction time. No filesystem dependency
 # on the resource file once built — same reasoning as the preset codegen above.
-set(IFSYNTH_RESOURCES_HPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.hpp")
-set(IFSYNTH_RESOURCES_CPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.cpp")
-file(GLOB IFSYNTH_RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Resources/*")
+set(STRUCKSYNTH_RESOURCES_HPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.hpp")
+set(STRUCKSYNTH_RESOURCES_CPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.cpp")
+file(GLOB STRUCKSYNTH_RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Resources/*")
 add_custom_command(
-    OUTPUT "${IFSYNTH_RESOURCES_HPP}" "${IFSYNTH_RESOURCES_CPP}"
+    OUTPUT "${STRUCKSYNTH_RESOURCES_HPP}" "${STRUCKSYNTH_RESOURCES_CPP}"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/dpf/utils/res2c.py"
             EmbeddedResources "${CMAKE_SOURCE_DIR}/Resources" "${CMAKE_BINARY_DIR}/generated"
-    DEPENDS ${IFSYNTH_RESOURCE_FILES} "${CMAKE_SOURCE_DIR}/dpf/utils/res2c.py"
+    DEPENDS ${STRUCKSYNTH_RESOURCE_FILES} "${CMAKE_SOURCE_DIR}/dpf/utils/res2c.py"
     COMMENT "Embedding Resources/* as compiled-in data")
-add_custom_target(generate_resources DEPENDS "${IFSYNTH_RESOURCES_HPP}" "${IFSYNTH_RESOURCES_CPP}")
+add_custom_target(generate_resources DEPENDS "${STRUCKSYNTH_RESOURCES_HPP}" "${STRUCKSYNTH_RESOURCES_CPP}")
 
 # --- the plugin: CLAP + OpenGL UI, built with DPF --------------------------
 # DPF (vendored submodule) owns the plugin wrapper and generates the .clap from our DSP + UI
@@ -102,30 +102,31 @@ add_dependencies(StruckSynth-ui generate_presets)
 target_include_directories(StruckSynth-ui PRIVATE "${CMAKE_BINARY_DIR}/generated")
 # Embedded logo bytes — the generated .cpp defines the data the .hpp declares.
 add_dependencies(StruckSynth-ui generate_resources)
-target_sources(StruckSynth-ui PRIVATE "${IFSYNTH_RESOURCES_CPP}")
+target_sources(StruckSynth-ui PRIVATE "${STRUCKSYNTH_RESOURCES_CPP}")
 # DPF may default to an older standard; the DSP glue includes C++20 framework headers.
 set_target_properties(StruckSynth-dsp StruckSynth-ui PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 # Dev-only JSON patch dumper (keystroke → file); compiled out of release builds.
-if(IFSYNTH_PRESET_DUMP)
-    target_compile_definitions(StruckSynth-ui PRIVATE IFSYNTH_PRESET_DUMP=1)
+if(STRUCKSYNTH_PRESET_DUMP)
+    target_compile_definitions(StruckSynth-ui PRIVATE STRUCKSYNTH_PRESET_DUMP=1)
 endif()
 
 # --- install: symlink the built .clap into the user CLAP dir ---------------
-# Not part of the default `all` build (avoids touching outside the build tree on every
-# rebuild); run explicitly with `cmake --build build --target install-clap`.
+# Runs automatically after StruckSynth-clap is (re)built, so the plugin in the
+# user CLAP dir is always a symlink pointing at the freshest build.
+# create_symlink replaces any existing file or link, so this is idempotent.
 if(APPLE)
-    set(IFSYNTH_CLAP_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/CLAP")
+    set(STRUCKSYNTH_CLAP_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/CLAP")
 else()
-    set(IFSYNTH_CLAP_DIR "$ENV{HOME}/.clap")
+    set(STRUCKSYNTH_CLAP_DIR "$ENV{HOME}/.clap")
 endif()
-add_custom_target(install-clap
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${IFSYNTH_CLAP_DIR}"
+add_custom_command(TARGET StruckSynth-clap POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${STRUCKSYNTH_CLAP_DIR}"
     COMMAND ${CMAKE_COMMAND} -E create_symlink
         "${CMAKE_BINARY_DIR}/bin/StruckSynth.clap"
-        "${IFSYNTH_CLAP_DIR}/StruckSynth.clap"
-    DEPENDS StruckSynth-clap
-    COMMENT "Symlinking StruckSynth.clap into ${IFSYNTH_CLAP_DIR}")
+        "${STRUCKSYNTH_CLAP_DIR}/StruckSynth.clap"
+    COMMENT "Symlinking StruckSynth.clap into ${STRUCKSYNTH_CLAP_DIR}"
+    VERBATIM)
 
 # --- self-tests (the framework; headless, no DAW) --------------------------
 add_executable(pm-selftest test/pm_selftest.cpp)
@@ -162,7 +163,7 @@ target_link_libraries(pm-voicemanager-test PRIVATE pm_framework)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     # pm-selftest only pulls in light headers → fully strict (optionally -Werror in CI).
     target_compile_options(pm-selftest PRIVATE -Wall -Wextra)
-    if(IFSYNTH_WERROR)
+    if(STRUCKSYNTH_WERROR)
         target_compile_options(pm-selftest PRIVATE -Werror)
     endif()
     # tests that pull in vendored headers → relaxed (unused params in inline methods).

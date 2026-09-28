@@ -8,8 +8,8 @@
 //  numerator feed-forward (x[n-1], x[n-2]) for stage 2.
 //
 
-#ifndef IFSYNTH_BUTTERLOW4_HPP
-#define IFSYNTH_BUTTERLOW4_HPP
+#ifndef STRUCKSYNTH_BUTTERLOW4_HPP
+#define STRUCKSYNTH_BUTTERLOW4_HPP
 
 #include <cmath>
 
@@ -97,4 +97,4 @@ private:
     double          q_;
 };
 
-#endif // IFSYNTH_BUTTERLOW4_HPP
+#endif // STRUCKSYNTH_BUTTERLOW4_HPP

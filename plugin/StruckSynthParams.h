@@ -6,7 +6,7 @@
 #ifndef STRUCKSYNTH_PARAMS_H
 #define STRUCKSYNTH_PARAMS_H
 
-namespace ifsynth {  // internal namespace kept as-is; renamed to strucksynth in the cosmetic sweep
+namespace strucksynth {
 
 enum ParamIndex {
    // --- Global ---
@@ -84,6 +84,6 @@ static constexpr const char* kMaterialNames[] = {
    "Golden", "Silver", "Piano", "Power", "Sqrt", "Box 3D", "Harmonic #",
 };
 
-} // namespace ifsynth
+} // namespace strucksynth
 
 #endif // STRUCKSYNTH_PARAMS_H

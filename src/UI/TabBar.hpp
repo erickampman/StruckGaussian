@@ -1,10 +1,10 @@
 // TabBar.hpp — a compact horizontal tab selector for DPF NanoVG UIs. Sits in a panel's title
-// strip and switches which of several overlaid panels is shown (see IFSynthUI's tab groups). The
+// strip and switches which of several overlaid panels is shown (see StruckSynthUI's tab groups). The
 // UI owns the show/hide of the actual content; this widget just reports the selected index via
 // the Callback. Identify which group fired with setId().
 
-#ifndef IFSYNTH_TABBAR_HPP
-#define IFSYNTH_TABBAR_HPP
+#ifndef STRUCKSYNTH_TABBAR_HPP
+#define STRUCKSYNTH_TABBAR_HPP
 
 #include "NanoVG.hpp"
 
@@ -99,4 +99,4 @@ private:
 
 END_NAMESPACE_DGL
 
-#endif // IFSYNTH_TABBAR_HPP
+#endif // STRUCKSYNTH_TABBAR_HPP

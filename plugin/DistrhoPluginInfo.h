@@ -1,4 +1,4 @@
-// DistrhoPluginInfo.h — compile-time description of the IFSynth plugin for DPF.
+// DistrhoPluginInfo.h — compile-time description of the StruckSynth plugin for DPF.
 // DPF reads these macros to generate the CLAP (and, if enabled, VST3/LV2) wrapper around
 // our Plugin/UI subclasses. IS_SYNTH gives it a note-input port + the CLAP "instrument"
 // feature, and pulls in MIDI input automatically.

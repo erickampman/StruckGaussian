@@ -1,4 +1,4 @@
-// pm_modroute_test — the modulation routing end to end at the voice level. Wires the IFSynth
+// pm_modroute_test — the modulation routing end to end at the voice level. Wires an IFS
 // patch, confirms IFSOsc's Bx mod input starts unconnected (wavetable path), connects an IFS LFO
 // into it (what VoiceManager::setModSource does), confirms it now reports connected (eval path),
 // and that the voice still renders audio through the modulated-eval path.
