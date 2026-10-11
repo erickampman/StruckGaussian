@@ -636,6 +636,63 @@ void testVelocity() {
    }
 }
 
+// --- channel mode messages: CC 123 All Notes Off, CC 120 All Sound Off ------------------------------
+void testChannelModeMessages() {
+   std::printf("All Notes Off / All Sound Off:\n");
+   {  // CC 123 releases only its channel's notes; they ring out like any released note.
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setBank(vm, ModalBankParamItemDecayT60, 0.05f);
+      vm.handleMIDIMessage(pm::fromMidi1Bytes(0x91, 60, 100));   // channel 2
+      vm.handleMIDIMessage(pm::fromMidi1Bytes(0x92, 64, 100));   // channel 3
+      vm.handleMIDIMessage(midi1CC(1, 123, 0));
+      check(vm.holdsNote(noteOn(60, 1)), "right after CC 123 the released note is still ringing");
+      render(vm, uint32_t(kSampleRate));
+      check(!vm.holdsNote(noteOn(60, 1)) && vm.holdsNote(noteOn(64, 2)),
+            "CC 123 on channel 2 releases channel 2's note and leaves channel 3's held");
+   }
+   {  // ...including a note the sustain pedal is holding.
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setBank(vm, ModalBankParamItemDecayT60, 0.05f);
+      vm.handleMIDIMessage(midi1CC(0, 64, 127));
+      vm.handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      vm.handleMIDIMessage(pm::fromMidi1Bytes(0x80, 60, 0));
+      render(vm, uint32_t(kSampleRate / 2));
+      check(vm.activeCount() == 1, "the pedal is holding the note");
+      vm.handleMIDIMessage(makeUmp(pm::kStatusControlChange, 0, 123, 0, 0));   // MIDI 2.0 CC 123
+      render(vm, uint32_t(kSampleRate));
+      check(vm.activeCount() == 0, "MIDI 2.0 CC 123 releases a pedal-held note");
+   }
+   {  // CC 120 cuts its channel's voices at once, ringing tails included; other channels play on.
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      vm.handleMIDIMessage(noteOn(60, 1));
+      vm.handleMIDIMessage(noteOn(67, 2));
+      vm.handleMIDIMessage(noteOff(60, 1));                     // channel 2's note is now just a tail
+      render(vm, 4096);
+      vm.handleMIDIMessage(midi1CC(1, 120, 0));
+      check(!vm.holdsNote(noteOn(60, 1)) && vm.holdsNote(noteOn(67, 2)) && vm.activeCount() == 1,
+            "CC 120 on channel 2 drops its ringing note immediately, channel 3's stays");
+      const std::vector<float> after = render(vm, uint32_t(kSampleRate));
+      check(toneLevel(after, pm::noteToFrequency(60)) < 1e-4 && toneLevel(after, pm::noteToFrequency(67)) > 0.01,
+            "C4 is silent at once, G4 still sounds (C4 " + num(toneLevel(after, pm::noteToFrequency(60))) + ")");
+      vm.handleMIDIMessage(midi1CC(2, 120, 0));
+      check(peakOf(render(vm, 4096)) == 0.0f, "CC 120 on the other channel leaves total silence");
+   }
+   {  // CC 120 must not make a voice forget other channels' bends (a full Voice::reset would).
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setVM(vm, MIDIParamItemVoiceCount, 1.0f);                  // one voice: the next note reuses it
+      vm.handleMIDIMessage(midi1Bend(4, 8192 + 4096));            // channel 5: +1 semitone at ±2
+      vm.handleMIDIMessage(noteOn(60, 1));
+      render(vm, 2048);
+      vm.handleMIDIMessage(midi1CC(1, 120, 0));
+      const double bent = semitonesFromC4(vm, 4);
+      check(std::fabs(bent - 1.0) < 0.01, "after CC 120 the voice still knows channel 5's bend (" + num(bent) + " st)");
+   }
+}
+
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
 void testGeneratedNoteOffsMatchChannel() {
@@ -688,6 +745,7 @@ int main() {
    testHoldsNote();
    testMpe();
    testVelocity();
+   testChannelModeMessages();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

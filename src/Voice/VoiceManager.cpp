@@ -126,6 +126,9 @@ void VoiceManager::handleMIDIMessage(const pm::UmpMessage& message) {
                 bool newState = message.ccData >= (UINT32_MAX / 2u + 1u);
                 handleSustainPedalChange(newState);
             }
+            // Channel mode messages: handled here, not passed on to the modules.
+            if (message.ccIndex == 123) { allNotesOffOnChannel(message.group, message.channel); return; }
+            if (message.ccIndex == 120) { allSoundOffOnChannel(message.group, message.channel); return; }
             break;
 		default:
 			break;
@@ -272,6 +275,55 @@ bool VoiceManager::holdsNote(const pm::UmpMessage& noteOn) {
     for (auto& voice : voices)
         if (voice->voiceStateManager.holdsNote(noteOn)) return true;
     return false;
+}
+
+// Take a voice out of the sustain pedal's deferred list, so pedal-up does not send it a note-off for
+// a note it no longer has.
+void VoiceManager::dropPedalSustain(Voice& voice) {
+    if (!voice.voiceStateManager.isPedalSustained()) return;
+    voice.voiceStateManager.setPedalSustained(false);
+    pedalSustainedVoiceIDs.erase(std::remove(pedalSustainedVoiceIDs.begin(), pedalSustainedVoiceIDs.end(), voice.id),
+                                 pedalSustainedVoiceIDs.end());
+}
+
+// releaseAllNotes, limited to the notes played on one group/channel. A mono voice can hold notes
+// from several channels; only this channel's leave the stack, and the sounding note is released
+// last so it does not retrigger one of them.
+void VoiceManager::releaseNotesOnChannel(Voice& voice, uint8_t group, uint8_t channel) {
+    auto onChannel = [group, channel](const pm::UmpMessage& m) { return m.group == group && m.channel == channel; };
+    std::vector<pm::UmpMessage> notes;
+    const std::optional<pm::UmpMessage> current = voice.voiceStateManager.currentNote();
+    for (const pm::UmpMessage& held : voice.voiceStateManager.heldNotes())
+        if (onChannel(held) && !(current && pm::isSameNote(held, *current))) notes.push_back(held);
+    if (current && onChannel(*current)) {
+        dropPedalSustain(voice);   // the pedal was holding this very note
+        notes.push_back(*current);
+    }
+    for (const pm::UmpMessage& on : notes) {
+        if (auto noteOff = pm::makeNoteOffMsgFromOnMsg(on)) voice.handleMIDIMessage(*noteOff);
+    }
+}
+
+// CC 123. Releases the channel's notes, the sustain pedal's included (hosts and senders use it to
+// clear everything). Released struck notes still ring out, as after any note-off.
+void VoiceManager::allNotesOffOnChannel(uint8_t group, uint8_t channel) {
+    for (auto& voice : voices) {
+        if (voice->voiceStateManager.holdsNoteOnChannel(group, channel))
+            releaseNotesOnChannel(*voice, group, channel);
+    }
+}
+
+// CC 120. Silences the channel's voices at once, ringing tails included. Only the modules that make
+// sound are reset: a full Voice::reset() would also clear the voice's per-channel bend memory, which
+// belongs to every channel, not just this one.
+void VoiceManager::allSoundOffOnChannel(uint8_t group, uint8_t channel) {
+    for (auto& voice : voices) {
+        if (!voice->voiceStateManager.holdsNoteOnChannel(group, channel)) continue;
+        dropPedalSustain(*voice);
+        voice->voiceStateManager.silence();
+        for (const AUParameterAddress address : { strike1Address, modalBank1Address })
+            if (Module* module = voice->getModule(address)) module->reset();
+    }
 }
 
 void VoiceManager::allNotesOff() {

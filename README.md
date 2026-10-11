@@ -73,7 +73,11 @@ The **MPE** switch (Global panel, off by default) treats input as an MPE lower z
 **A note is note number + channel + group.** The same key on two channels is two voices with
 independent per-note state, and note-offs the engine generates itself (sustain-pedal release,
 all-notes-off, panic) are built from the voice's own note-on so they match. In mono, per-note
-expression for a held-but-silent note in the stack doesn't move the sounding note. When the host
+expression for a held-but-silent note in the stack doesn't move the sounding note.
+
+**All Notes Off (CC 123)** releases the notes of the channel it arrives on, pedal-held ones included;
+they ring out like any released note. **All Sound Off (CC 120)** silences that channel's voices at
+once, ringing tails included. When the host
 tags notes with CLAP note ids, the ids decide instead, so a re-struck key is a new note.
 
 ### Pitch 7.25 and CLAP note expressions
