@@ -594,33 +594,34 @@ int main(int argc, char** argv) {
     // Proves the bend CV reaches ModalBank's second pitch input at full depth, not just in the engine.
     std::printf("Pitch bend through the real plugin:\n");
     {
+        // No RC 7: the per-note range is the channel's (±2), so half way up is +1 semitone.
         const clap_event_midi2_t noteOn = makeUmpNoteOn(uint8_t(kNote), 0xFFFF, 0, 0);
         clap_event_midi2_t bend = noteOn;
         bend.data[0] = (0x4u << 28) | (0x6u << 20) | (uint32_t(kNote) << 8);                // per-note bend
-        bend.data[1] = uint32_t(std::llround(2147483648.0 + 3.0 / 48.0 * 2147483648.0));   // +3 of ±48
+        bend.data[1] = 0xC0000000u;                                                        // half way up
         const clap_event_header_t* events[] = { &noteOn.header, &bend.header };
-        const double expected = kC4Hz * std::pow(2.0, 3.0 / 12.0);
-        const double hz = pitchOfEvents(lib, events, 2, expected, "MIDI 2.0 per-note bend +3");
+        const double expected = kC4Hz * std::pow(2.0, 1.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 2, expected, "per-note bend, default range");
         // Against the measured unbent C4, as for the 7.9 check: the patch's absolute pitch reads a
         // little sharp (64 modes, clipped), but a bend must move it by the exact interval.
-        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 3.0 / 12.0)) < 0.002,
-              "a per-note bend of +3 semitones moves C4 to D#4");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
+              "with no RC 7, a half-way per-note bend moves C4 up 1 semitone (±2)");
     }
     {
-        // KeyboardEDO's setup: announce a ±2 per-note range (registered controller 7), then bend
-        // half way up, which it means as +1 semitone.
+        // Announce a ±6 per-note range (registered controller 7, as KeyboardEDO's setup does), then
+        // bend half way up: +3 semitones, distinguishable from the ±2 default.
         clap_event_midi2_t range = makeUmpNoteOn(0, 0, 0, 0);
         range.data[0] = (0x4u << 28) | (0x2u << 20) | (0u << 8) | 7u;
-        range.data[1] = 2u << 25;
+        range.data[1] = 6u << 25;
         const clap_event_midi2_t noteOn = makeUmpNoteOn(uint8_t(kNote), 0xFFFF, 0, 0);
         clap_event_midi2_t bend = noteOn;
         bend.data[0] = (0x4u << 28) | (0x6u << 20) | (uint32_t(kNote) << 8);
         bend.data[1] = 0xC0000000u;                                                        // half way up
         const clap_event_header_t* events[] = { &range.header, &noteOn.header, &bend.header };
-        const double expected = kC4Hz * std::pow(2.0, 1.0 / 12.0);
-        const double hz = pitchOfEvents(lib, events, 3, expected, "per-note bend at RC7 = 2");
-        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
-              "registered controller 7 sets the per-note range: half way at ±2 is +1 semitone");
+        const double expected = kC4Hz * std::pow(2.0, 3.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 3, expected, "per-note bend at RC7 = 6");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 3.0 / 12.0)) < 0.002,
+              "registered controller 7 sets the per-note range: half way at ±6 is +3 semitones");
     }
     {
         const clap_event_midi_t bend = makeMidi1(0xE0, 0x00, 0x60);   // half way up: +1 of ±2

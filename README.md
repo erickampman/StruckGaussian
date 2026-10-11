@@ -37,15 +37,17 @@ bends. It sums two bends:
   every channel and applies the one its own note was played on: ordinary pitch bend with everything on
   one channel, and per-note bend when each note has its own channel (MPE-style). MPE's master-channel
   bend is not implemented yet.
-- **MIDI 2.0 per-note pitch bend** (UMP status `0x6`), **±48 semitones** by default (the MPE
-  convention). It bends only the note it names. A controller sets its own range per channel with
-  MIDI 2.0 **registered controller 7** (per-note pitch bend sensitivity), as KeyboardEDO does; that
-  range survives a host `reset()`, since it is configuration the controller sends once.
+- **MIDI 2.0 per-note pitch bend** (UMP status `0x6`). It bends only the note it names, over the same
+  range as its channel's bend (**±2** by default): M2-104 v1.0 says per-note bend "acts like Pitch
+  Bend in every way" and gives it no range of its own. A controller can set a separate per-note range
+  per channel with MIDI 2.0 **registered controller 7** (per-note pitch bend sensitivity, from a later
+  revision of M2-104), as KeyboardEDO does; that range survives a host `reset()`, since it is
+  configuration the controller sends once.
 
 Bend changes ramp over 2 ms, and a note starts at its bent pitch. ModalBank retunes its modes once per
 block without resetting them, so a bend glides the ringing tail rather than re-striking it. Per-note
 bend resets on every note-on and on a per-note management Reset; one sent *before* its note-on is
-dropped, because no voice owns that note yet. Neither default range is a host parameter yet, and
+dropped, because no voice owns that note yet. The default range is not a host parameter yet, and
 RPN 0 (channel bend range) is not handled yet.
 
 **A note is note number + channel + group.** The same key on two channels is two voices with

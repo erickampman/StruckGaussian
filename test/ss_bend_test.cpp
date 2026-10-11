@@ -120,6 +120,7 @@ pm::UmpMessage noteOff(uint8_t note, uint8_t channel = 0) {
 uint32_t bendWord(double semitones, double range) {
    return uint32_t(std::llround(2147483648.0 + semitones / range * 2147483648.0));
 }
+// Most checks bend further than the ±2 default, so they first announce ±48 with perNoteRange().
 pm::UmpMessage perNoteBend(uint8_t note, double semitones, uint8_t channel = 0, double range = 48.0) {
    return makeUmp(pm::kStatusPerNotePitchBend, channel, note, 0, bendWord(semitones, range));
 }
@@ -202,6 +203,7 @@ void testPerNoteBend() {
 
    VoiceManager vm(kSampleRate, kBlock);
    configure(vm);
+   vm.handleMIDIMessage(perNoteRange(48.0));
    vm.handleMIDIMessage(noteOn(60));
    vm.handleMIDIMessage(noteOn(67));
    vm.handleMIDIMessage(perNoteBend(60, 1.0));
@@ -214,6 +216,7 @@ void testPerNoteBend() {
    // Two notes on the SAME key but different channels are different notes.
    VoiceManager same(kSampleRate, kBlock);
    configure(same);
+   same.handleMIDIMessage(perNoteRange(48.0, 1));
    same.handleMIDIMessage(noteOn(60, 0));
    same.handleMIDIMessage(noteOn(60, 1));
    check(same.activeCount() == 2, "C4 on channels 1 and 2 takes two voices (got " + num(same.activeCount()) + ")");
@@ -234,6 +237,7 @@ void testPerNoteBend() {
    VoiceManager reuse(kSampleRate, kBlock);
    configure(reuse);
    setVM(reuse, MIDIParamItemVoiceCount, 1.0f);   // the next note lands on the same voice
+   reuse.handleMIDIMessage(perNoteRange(48.0));
    reuse.handleMIDIMessage(noteOn(60));
    reuse.handleMIDIMessage(perNoteBend(60, 2.0));
    render(reuse, 4096);
@@ -245,6 +249,7 @@ void testPerNoteBend() {
    // Per-note management with the Reset flag recentres the bend.
    VoiceManager mgmt(kSampleRate, kBlock);
    configure(mgmt);
+   mgmt.handleMIDIMessage(perNoteRange(48.0));
    mgmt.handleMIDIMessage(noteOn(60));
    mgmt.handleMIDIMessage(perNoteBend(60, 3.0));
    render(mgmt, 4096);
@@ -255,6 +260,7 @@ void testPerNoteBend() {
    // Mono: a bend for a held-but-silent note in the stack must not move the sounding note.
    VoiceManager mono(kSampleRate, kBlock);
    configure(mono, true);
+   mono.handleMIDIMessage(perNoteRange(48.0));
    mono.handleMIDIMessage(noteOn(60));
    mono.handleMIDIMessage(noteOn(64));
    mono.handleMIDIMessage(perNoteBend(60, 5.0));
@@ -267,28 +273,36 @@ void testPerNoteBend() {
    check(near(bentE, c4), "mono: bending the sounding E4 down 4 semitones (" + hz(bentE) + ")");
 }
 
-// MIDI 2.0 registered controller 7 sets the per-note bend range for its channel; a controller that
-// announces ±2 and scales its bends to match must be heard at ±2, not the ±48 default.
+// Per-note bend range: with nothing set it is the channel's bend range (±2), per M2-104 v1.0's
+// "acts like Pitch Bend in every way"; MIDI 2.0 registered controller 7 sets it per channel.
 void testPerNoteBendRange() {
-   std::printf("Per-note pitch bend sensitivity (registered controller 7):\n");
+   std::printf("Per-note pitch bend range:\n");
    const double c4 = pm::noteToFrequency(60);
 
    VoiceManager vm(kSampleRate, kBlock);
    configure(vm);
-   vm.handleMIDIMessage(perNoteRange(2.0));
    vm.handleMIDIMessage(noteOn(60));
-   vm.handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));   // half way up at ±2
+   vm.handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));   // half way up
    const double bent = estimateFrequency(render(vm, uint32_t(kSampleRate)));
-   check(near(bent, semitonesUp(c4, 1.0)), "at ±2, a half-way per-note bend is +1 semitone (" + hz(bent) + ")");
+   check(near(bent, semitonesUp(c4, 1.0)),
+         "with no RC 7, per-note bend uses the channel range: half way at ±2 is +1 semitone (" + hz(bent) + ")");
+
+   VoiceManager wide(kSampleRate, kBlock);
+   configure(wide);
+   wide.handleMIDIMessage(perNoteRange(12.0));
+   wide.handleMIDIMessage(noteOn(60));
+   wide.handleMIDIMessage(perNoteBend(60, 6.0, 0, 12.0));   // half way up at ±12
+   const double wideBent = estimateFrequency(render(wide, uint32_t(kSampleRate)));
+   check(near(wideBent, semitonesUp(c4, 6.0)), "RC 7 = 12: half way is +6 semitones (" + hz(wideBent) + ")");
 
    VoiceManager other(kSampleRate, kBlock);
    configure(other);
-   other.handleMIDIMessage(perNoteRange(2.0, 5));        // a different channel
+   other.handleMIDIMessage(perNoteRange(12.0, 5));          // a different channel
    other.handleMIDIMessage(noteOn(60));
-   other.handleMIDIMessage(perNoteBend(60, 3.0));        // +3 of the ±48 default
+   other.handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));
    const double untouched = estimateFrequency(render(other, uint32_t(kSampleRate)));
-   check(near(untouched, semitonesUp(c4, 3.0)),
-         "a range set on channel 6 leaves channel 1 at the ±48 default (" + hz(untouched) + ")");
+   check(near(untouched, semitonesUp(c4, 1.0)),
+         "a range set on channel 6 leaves channel 1 at the ±2 default (" + hz(untouched) + ")");
 
    VoiceManager cents(kSampleRate, kBlock);
    configure(cents);
@@ -301,12 +315,12 @@ void testPerNoteBendRange() {
 
    VoiceManager kept(kSampleRate, kBlock);
    configure(kept);
-   kept.handleMIDIMessage(perNoteRange(2.0));
+   kept.handleMIDIMessage(perNoteRange(12.0));
    kept.reset();                                          // a host reset, e.g. on transport stop
    kept.handleMIDIMessage(noteOn(60));
-   kept.handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));
+   kept.handleMIDIMessage(perNoteBend(60, 6.0, 0, 12.0));
    const double afterReset = estimateFrequency(render(kept, uint32_t(kSampleRate)));
-   check(near(afterReset, semitonesUp(c4, 1.0)), "the range survives a reset (" + hz(afterReset) + ")");
+   check(near(afterReset, semitonesUp(c4, 6.0)), "the RC 7 range survives a reset (" + hz(afterReset) + ")");
 }
 
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the

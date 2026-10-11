@@ -7,8 +7,10 @@
 //
 //  - Per-note pitch bend (UMP status 0x6). One instance lives in every voice, and the voice only
 //    passes it per-note messages for the note it is sounding (VoiceStateManager::handleMIDIMessage),
-//    so this module simply applies whatever per-note bend reaches it. Range: PerNoteSemitones
-//    (default ±48, the MPE convention).
+//    so this module simply applies whatever per-note bend reaches it. Range: the channel bend range
+//    of the note's channel, unless registered controller 7 set one (below). M2-104 v1.0 §4.2.12 says
+//    per-note bend "acts like Pitch Bend in every way" and defines no range of its own; PlainOldSynth's
+//    fixed ±48 was MPE's member-channel convention, which belongs to channel bend, not to this.
 //  - Channel bend tracked PER CHANNEL. Channel bends reach every voice, including idle ones; each
 //    voice remembers all sixteen channels (× groups) and applies the one its note was played on. With
 //    everything on one channel that is the ordinary behaviour; with a note per channel (MPE, or a
@@ -16,8 +18,8 @@
 //    (default ±2).
 //  - Per-note pitch bend sensitivity (MIDI 2.0 registered controller bank 0 / index 7) overrides the
 //    per-note range for the channel it arrives on — a controller such as KeyboardEDO announces its
-//    range this way and scales its bends to match, so ignoring it bends by the wrong amount (±2 sent,
-//    ±48 heard). Unlike the rest of this state it survives reset(): it is configuration the
+//    range this way and scales its bends to match. (RC 7 is not in M2-104 v1.0; it is from a later
+//    revision.) Unlike the rest of this state it survives reset(): it is configuration the
 //    controller sent once, not processing state, and some hosts call reset() on transport stop.
 //  - De-zippering. Bend arrives as discrete events; a step in pitch is audible, so a change of target
 //    ramps linearly over kRampSeconds. Every note-on snaps instead: the note must start at its bent
@@ -66,8 +68,7 @@ float targetOctaves(const PitchBendConverterHelperStruct& st, Module* module) {
     // The QuarterTones param is the channel range in quarter tones, so divide by 2 for semitones.
     const float channelSemis = module->paramByEnum(PitchBendConverterParamItemQuarterTones) * 0.5f;
     const float rc7 = st.perNoteRange[st.group][st.channel];
-    const float perNoteSemis = rc7 >= 0.0f ? rc7
-                                           : module->paramByEnum(PitchBendConverterParamItemPerNoteSemitones);
+    const float perNoteSemis = rc7 >= 0.0f ? rc7 : channelSemis;   // no RC 7: like channel bend
     const float semis = st.channelBend[st.group][st.channel] * channelSemis
                       + st.perNoteBend * perNoteSemis;
     return semis / 12.0f;
