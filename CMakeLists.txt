@@ -115,6 +115,10 @@ target_compile_definitions(strucksynth_core PUBLIC
 target_link_libraries(strucksynth_core PUBLIC pm_framework dgl-opengl)
 add_dependencies(strucksynth_core generate_presets generate_resources)
 dpf__add_plugin_specific_ui_sources(strucksynth_core FALSE)   # macOS: DistrhoUI_macOS.mm
+if(APPLE)
+    # The live Retina scale of the host window (see the file's header comment).
+    target_sources(strucksynth_core PRIVATE src/UI/BackingScale_mac.mm)
+endif()
 # Dev-only JSON patch dumper (keystroke → file); compiled out of release builds.
 if(STRUCKSYNTH_PRESET_DUMP)
     target_compile_definitions(strucksynth_core PRIVATE STRUCKSYNTH_PRESET_DUMP=1)
