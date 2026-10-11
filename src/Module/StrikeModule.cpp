@@ -96,7 +96,9 @@ void MIDIStrikeModule(const pm::UmpMessage& message, Module* module)
 {
     auto* st = static_cast<StrikeState*>(module->state);
     if (!st) return;
-    if (message.status == pm::kStatusNoteOn && message.velocity > 0) {
+    // Every note-on strikes, velocity 0 included: in MIDI 2.0 that is a real note-on, and how loud
+    // it is belongs to VelToLevel (at 1, velocity 0 is silent; at 0, it strikes at full level).
+    if (pm::isNoteOn(message)) {
         st->pendingVel     = (float)message.velocity / 65535.0f;   // MIDI 2.0 16-bit
         st->pendingNote    = (float)message.note;                  // sizes note-relative contact
         st->pendingTrigger = true;

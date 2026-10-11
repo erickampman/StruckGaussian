@@ -37,7 +37,7 @@ itself, and `clap-validator` (below) checks CLAP conformance:
 
 | CTest name       | Executable               | Verifies |
 |------------------|--------------------------|----------|
-| `pm`             | `pm-selftest`            | UMP MIDI layer: predicates, raw-word decode, microtonal pitch attribute, CLAP→UMP decoders |
+| `pm`             | `pm-selftest`            | UMP MIDI layer: predicates (a MIDI 2.0 velocity-0 note-on is a note-on), raw-word decode, MIDI 1.0 → 2.0 Min-Center-Max scaling, microtonal pitch attribute, CLAP→UMP decoders |
 | `pm-module`      | `pm-module-test`         | `Module` + `ModuleMap` core: param read/write, process proc, map add/get |
 | `pm-sinosc`      | `pm-sinosc-test`         | The vendored sine oscillator produces an ~A440 sine |
 | `pm-ifscore`     | `pm-ifscore-test`        | IFSCore's per-point smoothed eval matches its wavetable (the IFS modules inherited from IFSynth) |
@@ -47,8 +47,8 @@ itself, and `clap-validator` (below) checks CLAP conformance:
 | `pm-voice`       | `pm-voice-test`          | One full voice renders a note end-to-end and releases |
 | `pm-modroute`    | `pm-modroute-test`       | Modulation routing at the voice level: connecting a mod source switches the destination's path |
 | `pm-voicemanager`| `pm-voicemanager-test`   | Polyphony: a 3-note chord allocates 3 voices and frees them on release |
-| `ss-bend`        | `ss-bend-test`           | MIDI 2.0 per-note decode; channel and per-note pitch bend (pitch measured on a single-mode bank); note matching on note + channel + group; per-note bend range (RC 7); Pitch 7.25; CLAP note ids; CLAP note expression conversion; note lifetime (ring-out, mono stack, steal) for note end; MPE member range, master bend, RPN 0 (MIDI 1.0 and 2.0, kept across reset), MPE Configuration Message and switch-flip resets; pedal / all-notes-off / panic release notes on any channel |
-| `ss-clap`        | `ss-clap-host-test`      | The built `.clap` over the CLAP C API: note-port dialects, params + state, 7.9-pitch notes, per-note and channel bend, RC 7, CLAP tuning expressions (with key, and by note id alone) reach the resonator; NOTE_END comes once, after the ring-out, for CLAP notes only; voice-info; the MPE switch is an Off/On enum that changes how a member bend reads; pitch is measured to a fraction of a sample |
+| `ss-bend`        | `ss-bend-test`           | MIDI 2.0 per-note decode; channel and per-note pitch bend (pitch measured on a single-mode bank); note matching on note + channel + group; per-note bend range (RC 7); Pitch 7.25; CLAP note ids; CLAP note expression conversion; note lifetime (ring-out, mono stack, steal) for note end; MPE member range, master bend, RPN 0 (MIDI 1.0 and 2.0, kept across reset), MPE Configuration Message and switch-flip resets; velocity (MIDI 1.0 127 = MIDI 2.0 full scale; velocity-0 note-ons hold a voice); pedal / all-notes-off / panic release notes on any channel |
+| `ss-clap`        | `ss-clap-host-test`      | The built `.clap` over the CLAP C API: note-port dialects, params + state, 7.9-pitch notes, per-note and channel bend, RC 7, CLAP tuning expressions (with key, and by note id alone) reach the resonator; NOTE_END comes once, after the ring-out, for CLAP notes only; voice-info; the MPE switch is an Off/On enum that changes how a member bend reads; MIDI 1.0 velocity 127 strikes exactly as CLAP velocity 1.0; pitch is measured to a fraction of a sample |
 
 ## Running a single test
 

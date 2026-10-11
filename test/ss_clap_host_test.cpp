@@ -739,6 +739,26 @@ int main(int argc, char** argv) {
               "MPE on reads a member-channel bend at ±48 (+3 st), off at ±2 (+0.125 st)");
     }
 
+    // --- velocity: MIDI 1.0 127 is full scale (the spec's Min-Center-Max upscaling) ----------------
+    std::printf("Velocity scaling:\n");
+    {
+        auto peakFor = [&](const clap_event_header_t* note) {
+            Instance inst;
+            if (!inst.create(lib)) return -1.0f;
+            installTestPatch(inst.plugin);
+            sendParam(inst.plugin, kParamLevel, 0.1);   // stay clear of the output clip
+            const clap_event_header_t* events[] = { note };
+            const float peak = peakOf(render(inst.plugin, 4096, events, 1));
+            inst.destroy();
+            return peak;
+        };
+        const clap_event_midi_t midi1 = makeMidi1(0x90, uint8_t(kNote), 127);
+        const clap_event_note_t clapNote = makeClapNoteOn(int16_t(kNote), 1.0);
+        const float a = peakFor(&midi1.header), b = peakFor(&clapNote.header);
+        std::printf("        peak: MIDI 1.0 vel 127 %.6f | CLAP vel 1.0 %.6f\n", double(a), double(b));
+        check(a > 0.001f && a == b, "MIDI 1.0 velocity 127 strikes exactly as a CLAP note at velocity 1.0");
+    }
+
     // --- note end + voice-info ---------------------------------------------------------------------
     // A struck note rings on after note-off; CLAP_EVENT_NOTE_END must come when it falls silent, not
     // at the note-off, and only for notes that arrived as CLAP note events.

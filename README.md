@@ -16,7 +16,9 @@ envelope, and a voice frees itself once it rings down to silence, so the tail su
 note-off.
 
 - **Strike** (exciter): Mallet or Noise burst, hardness, velocity → level / hardness, contact
-  mode.
+  mode. MIDI 1.0 values are scaled to MIDI 2.0 with the spec's Min-Center-Max method, so velocity
+  127 is full scale (as are CC 127 and a full pitch bend), and 64 / 8192 the exact centre. A MIDI 2.0
+  note-on with velocity 0 is a note-on, as the spec says; Vel>Level decides how loud it is.
 - **ModalBank** (resonator): up to 64 modes, material presets, stretch, decay (T60), damping
   tilt + bell, strike position, brightness, stereo spread.
 - **Voices**: Poly (10 voices) or Mono (legato, with glide).

@@ -589,6 +589,53 @@ void testMpe() {
    }
 }
 
+// --- velocity ------------------------------------------------------------------------------------
+float peakOf(const std::vector<float>& s) {
+   float p = 0.0f;
+   for (float x : s) p = std::max(p, std::fabs(x));
+   return p;
+}
+void setStrike(VoiceManager& vm, StrikeParamItem item, float v) {
+   vm.setParameter(MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, item), v);
+}
+
+void testVelocity() {
+   std::printf("Velocity:\n");
+   {  // The spec's Min-Center-Max upscaling: MIDI 1.0 velocity 127 is MIDI 2.0 full scale exactly.
+      VoiceManager a(kSampleRate, kBlock), b(kSampleRate, kBlock);
+      configure(a); configure(b);
+      a.handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 127));
+      b.handleMIDIMessage(makeUmp(pm::kStatusNoteOn, 0, 60, 0, 0xFFFFu << 16));
+      const float pa = peakOf(render(a, 4096)), pb = peakOf(render(b, 4096));
+      check(pa > 0.01f && pa == pb, "MIDI 1.0 velocity 127 strikes exactly as MIDI 2.0 velocity 0xFFFF ("
+                                        + num(double(pa)) + " vs " + num(double(pb)) + ")");
+   }
+   {  // MIDI 2.0: velocity 0 is a note-on, not a note-off. With Vel>Level at 0 it strikes at full level.
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setStrike(vm, StrikeParamItemVelToLevel, 0.0f);
+      vm.handleMIDIMessage(makeUmp(pm::kStatusNoteOn, 0, 60, 0, 0));
+      const float p = peakOf(render(vm, 4096));
+      check(vm.activeCount() == 1 && p > 0.01f,
+            "a MIDI 2.0 velocity-0 note-on holds a voice and, at Vel>Level 0, sounds (" + num(double(p)) + ")");
+      setBank(vm, ModalBankParamItemDecayT60, 0.05f);
+      vm.handleMIDIMessage(noteOff(60));
+      render(vm, uint32_t(kSampleRate));
+      check(vm.activeCount() == 0, "...and its note-off releases it");
+   }
+   {  // At Vel>Level 1, velocity 0 is silent, but still a held note (not a release of anything).
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setStrike(vm, StrikeParamItemVelToLevel, 1.0f);
+      vm.handleMIDIMessage(noteOn(60));
+      render(vm, 2048);
+      vm.handleMIDIMessage(makeUmp(pm::kStatusNoteOn, 0, 64, 0, 0));
+      render(vm, 2048);
+      check(vm.activeCount() == 2 && vm.holdsNote(noteOn(60)),
+            "at Vel>Level 1, a velocity-0 note-on is silent but still takes a voice of its own");
+   }
+}
+
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
 void testGeneratedNoteOffsMatchChannel() {
@@ -640,6 +687,7 @@ int main() {
    testClapNoteExpressionConversion();
    testHoldsNote();
    testMpe();
+   testVelocity();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);
