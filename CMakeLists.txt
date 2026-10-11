@@ -78,55 +78,109 @@ add_custom_command(
     COMMENT "Embedding Resources/* as compiled-in data")
 add_custom_target(generate_resources DEPENDS "${STRUCKSYNTH_RESOURCES_HPP}" "${STRUCKSYNTH_RESOURCES_CPP}")
 
-# --- the plugin: CLAP + OpenGL UI, built with DPF --------------------------
-# DPF (vendored submodule) owns the plugin wrapper and generates the .clap from our DSP + UI
-# subclasses; the DSP side drives pm_framework's VoiceManager. The four ADSR knobs route to
-# the envelope module live.
+# --- DPF is used ONLY for the GUI ------------------------------------------
+# UIExporter + NanoVG + pugl. The CLAP entry point is ours (src/plugin.cpp), because DPF's
+# generated CLAP wrapper cannot receive MIDI 2.0 note events — see that file's header.
 add_subdirectory(dpf)
-dpf_add_plugin(StruckSynth
-    TARGETS clap
-    UI_TYPE opengl
-    FILES_DSP
-        plugin/StruckSynthPlugin.cpp
-    FILES_UI
-        src/UI/StruckSynthUI.cpp)
-# So both DSP and UI sources find DistrhoPluginInfo.h + StruckSynthParams.h.
-target_include_directories(StruckSynth PUBLIC plugin)
-# The DSP side pulls in the vendored engine.
-target_link_libraries(StruckSynth-dsp PUBLIC pm_framework)
-# The UI's IFSControl pad draws the true DSP waveform via IFSCore (computeIFSWavetable), so it
-# links pm_framework too. Static-lib symbol extraction dedups it in the final .clap.
-target_link_libraries(StruckSynth-ui PUBLIC pm_framework)
-# Generated preset array (see the codegen step above) — must exist before StruckSynthUI.cpp compiles.
-add_dependencies(StruckSynth-ui generate_presets)
-target_include_directories(StruckSynth-ui PRIVATE "${CMAKE_BINARY_DIR}/generated")
-# Embedded logo bytes — the generated .cpp defines the data the .hpp declares.
-add_dependencies(StruckSynth-ui generate_resources)
-target_sources(StruckSynth-ui PRIVATE "${STRUCKSYNTH_RESOURCES_CPP}")
-# DPF may default to an older standard; the DSP glue includes C++20 framework headers.
-set_target_properties(StruckSynth-dsp StruckSynth-ui PROPERTIES
-    CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+# dgl-opengl is normally created by dpf_add_plugin()'s UI_TYPE branch; call the same helper
+# directly. SHARED_RESOURCES=TRUE embeds DGL's DejaVu font (fontFace(NANOVG_DEJAVU_SANS_TTF)).
+dpf__add_dgl_opengl(TRUE FALSE FALSE)
+
+# --- strucksynth_core: the whole plugin (DSP + host glue + GUI shell) as one static archive ----
+# Shared by the .clap output below. Hidden visibility for our own objects, so clap_entry — marked
+# CLAP_EXPORT in plugin.cpp — is the only symbol this target exports (the vendored engine and DGL
+# libraries linked in keep their own default visibility).
+add_library(strucksynth_core STATIC
+    src/plugin.cpp
+    src/UI/StruckSynthUI.cpp
+    "${STRUCKSYNTH_RESOURCES_CPP}"              # generated: the logo bytes (see above)
+    "${DPF_ROOT_DIR}/distrho/src/DistrhoUI.cpp"
+    "${DPF_ROOT_DIR}/distrho/src/DistrhoUtils.cpp")
+set_target_properties(strucksynth_core PROPERTIES
+    C_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON)
+target_include_directories(strucksynth_core PUBLIC
+    src                               # plugin_gui.h (the DSP <-> GUI seam)
+    plugin                            # DistrhoPluginInfo.h + StruckSynthParams.h
+    external/clap/include             # <clap/clap.h> (the raw entry point)
+    "${CMAKE_BINARY_DIR}/generated"   # GeneratedPresets.h + EmbeddedResources.hpp
+    "${DPF_ROOT_DIR}/distrho")        # DistrhoUI.hpp / DistrhoUIInternal.hpp
+target_compile_definitions(strucksynth_core PUBLIC
+    DISTRHO_PLUGIN_TARGET_CLAP
+    DISTRHO_IS_STANDALONE=0
+    STRUCKSYNTH_VERSION_STRING="${PROJECT_VERSION}")
+target_link_libraries(strucksynth_core PUBLIC pm_framework dgl-opengl)
+add_dependencies(strucksynth_core generate_presets generate_resources)
+dpf__add_plugin_specific_ui_sources(strucksynth_core FALSE)   # macOS: DistrhoUI_macOS.mm
 # Dev-only JSON patch dumper (keystroke → file); compiled out of release builds.
 if(STRUCKSYNTH_PRESET_DUMP)
-    target_compile_definitions(StruckSynth-ui PRIVATE STRUCKSYNTH_PRESET_DUMP=1)
+    target_compile_definitions(strucksynth_core PRIVATE STRUCKSYNTH_PRESET_DUMP=1)
+endif()
+
+# --- the .clap output ------------------------------------------------------
+# A MODULE with no sources of its own would be rejected by CMake, and simply linking the archive is
+# not enough: nothing references clap_entry, so the linker would drop the object that defines it.
+# Hence the empty placeholder plus a whole-archive force-load.
+function(strucksynth_force_load_whole_archive TARGET_NAME LIB_NAME)
+    if(APPLE)
+        target_link_options(${TARGET_NAME} PRIVATE "-Wl,-force_load,$<TARGET_FILE:${LIB_NAME}>")
+    elseif(UNIX)
+        target_link_options(${TARGET_NAME} PRIVATE
+            "-Wl,--whole-archive" "$<TARGET_FILE:${LIB_NAME}>" "-Wl,--no-whole-archive")
+    endif()
+endfunction()
+
+set(STRUCKSYNTH_EMPTY_SOURCE "${CMAKE_BINARY_DIR}/generated/strucksynth_empty.c")
+# A genuinely empty file trips -Wempty-translation-unit under -Wpedantic -Werror, and ISO C requires
+# at least one declaration anyway.
+set(_strucksynth_empty_content "typedef int strucksynth_empty_translation_unit_marker;\n")
+set(_strucksynth_empty_existing "")
+if(EXISTS "${STRUCKSYNTH_EMPTY_SOURCE}")
+    file(READ "${STRUCKSYNTH_EMPTY_SOURCE}" _strucksynth_empty_existing)
+endif()
+if(NOT _strucksynth_empty_existing STREQUAL _strucksynth_empty_content)
+    file(WRITE "${STRUCKSYNTH_EMPTY_SOURCE}" "${_strucksynth_empty_content}")
+endif()
+
+add_library(StruckSynth MODULE "${STRUCKSYNTH_EMPTY_SOURCE}")
+target_link_libraries(StruckSynth PRIVATE strucksynth_core)
+strucksynth_force_load_whole_archive(StruckSynth strucksynth_core)
+
+if(APPLE)
+    set_target_properties(StruckSynth PROPERTIES
+        BUNDLE TRUE
+        BUNDLE_EXTENSION "clap"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.unlikelyware.strucksynth"
+        MACOSX_BUNDLE_BUNDLE_NAME "StruckSynth"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+else()
+    set_target_properties(StruckSynth PROPERTIES PREFIX "" SUFFIX ".clap")
 endif()
 
 # --- install: symlink the built .clap into the user CLAP dir ---------------
-# Runs automatically after StruckSynth-clap is (re)built, so the plugin in the
-# user CLAP dir is always a symlink pointing at the freshest build.
-# create_symlink replaces any existing file or link, so this is idempotent.
+# A separate target (mirroring PlainOldSynth), not a POST_BUILD step, so an ordinary `ninja` build
+# never writes outside the build tree. rm -rf first: create_symlink cannot replace a real bundle
+# directory, and older DPF-based builds left a symlink to build/bin/StruckSynth.clap behind.
 if(APPLE)
     set(STRUCKSYNTH_CLAP_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/CLAP")
+    set(STRUCKSYNTH_CLAP_ARTIFACT "$<TARGET_BUNDLE_DIR:StruckSynth>")
 else()
     set(STRUCKSYNTH_CLAP_DIR "$ENV{HOME}/.clap")
+    set(STRUCKSYNTH_CLAP_ARTIFACT "$<TARGET_FILE:StruckSynth>")
 endif()
-add_custom_command(TARGET StruckSynth-clap POST_BUILD
+add_custom_target(install-clap
     COMMAND ${CMAKE_COMMAND} -E make_directory "${STRUCKSYNTH_CLAP_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${STRUCKSYNTH_CLAP_DIR}/StruckSynth.clap"
     COMMAND ${CMAKE_COMMAND} -E create_symlink
-        "${CMAKE_BINARY_DIR}/bin/StruckSynth.clap"
+        "${STRUCKSYNTH_CLAP_ARTIFACT}"
         "${STRUCKSYNTH_CLAP_DIR}/StruckSynth.clap"
-    COMMENT "Symlinking StruckSynth.clap into ${STRUCKSYNTH_CLAP_DIR}"
-    VERBATIM)
+    DEPENDS StruckSynth
+    VERBATIM
+    COMMENT "Symlinking StruckSynth.clap into ${STRUCKSYNTH_CLAP_DIR}")
 
 # --- self-tests (the framework; headless, no DAW) --------------------------
 add_executable(pm-selftest test/pm_selftest.cpp)
@@ -203,3 +257,24 @@ set_tests_properties(pm-modroute PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
 
 add_test(NAME pm-voicemanager COMMAND pm-voicemanager-test)
 set_tests_properties(pm-voicemanager PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
+
+# --- end-to-end CLAP host test: note-port dialect negotiation + the MIDI 2.0 7.9-pitch path ------
+# Drives the real built .clap over the CLAP C API (no DAW, no GUI): dlopen + clap_entry + factory,
+# then a MIDI 2.0 channel-voice-2 NoteOn carrying a 7.9-pitch attribute. This is the only check that
+# proves the raw entry point does what dpf_add_plugin could not.
+add_executable(ss-clap-host-test test/ss_clap_host_test.cpp)
+target_include_directories(ss-clap-host-test PRIVATE
+    external/clap/include             # <clap/clap.h>
+    plugin)                           # StruckSynthParams.h (parameter ids/enums)
+# dlopen/dlsym/dlclose: on glibc before 2.34 these live in libdl, so ask CMake for the right library
+# rather than assuming it is part of libc (it is not, on older Linux distributions).
+target_link_libraries(ss-clap-host-test PRIVATE ${CMAKE_DL_LIBS})
+add_dependencies(ss-clap-host-test StruckSynth)
+
+if(APPLE)
+    set(STRUCKSYNTH_CLAP_UNDER_TEST "$<TARGET_BUNDLE_DIR:StruckSynth>")
+else()
+    set(STRUCKSYNTH_CLAP_UNDER_TEST "$<TARGET_FILE:StruckSynth>")
+endif()
+add_test(NAME ss-clap COMMAND ss-clap-host-test "${STRUCKSYNTH_CLAP_UNDER_TEST}")
+set_tests_properties(ss-clap PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")

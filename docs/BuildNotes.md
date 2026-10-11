@@ -2,7 +2,7 @@ CONFIGURE
 
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 
-BUILD (also symlinks build/bin/StruckSynth.clap into ~/.clap via a post-build step)
+BUILD (the .clap lands at build/StruckSynth.clap; no files outside the build tree are touched)
 
 cmake --build build -j
 

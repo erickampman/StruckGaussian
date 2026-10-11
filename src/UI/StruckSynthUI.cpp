@@ -5,15 +5,19 @@
 
 #include "DistrhoUI.hpp"
 
+#include "src/DistrhoUIInternal.hpp" // DPF's UIExporter (DPF_ROOT_DIR/distrho is on the include path)
+
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "DistrhoPluginInfo.h"
 #include "Dropdown.hpp"
 #include "EmbeddedResources.hpp" // build-time codegen: Unlikelyware logo PNG bytes
 #include "GeneratedPresets.h"     // build-time codegen from Presets/*.json (see tools/gen_presets.py)
@@ -27,8 +31,10 @@
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
 #include "ModalGenerators.hpp"  // procedural mode series
 #include "ModalMaterials.hpp"   // static material tables + kModalStretchValues
+#include "CPPTypes.hpp"         // DEFAULT_SAMPLE_RATE (the UIExporter's nominal rate below)
 #include "pm_params.h"          // ModalBankMaterial / MODAL_BANK_FIRST_GENERATOR
 #include "StruckSynthParams.h"
+#include "plugin_gui.h"         // the C seam to src/plugin.cpp (the raw CLAP plugin)
 
 START_NAMESPACE_DISTRHO
 
@@ -189,8 +195,14 @@ public:
         setGeometryConstraints(864, 512, true, false); // lock the 1080:640 design ratio (0.8x min)
         fHasFont = loadSharedResources();               // DPF's bundled DejaVu Sans for the title
 
+        // DPF is only the GUI layer here: UIExporter set uiData->dspPtr (our clap_plugin_t) before
+        // calling createUI(), so the seam in plugin_gui.h is already usable. Reading the values
+        // through it means an editor opened on a host-restored patch starts in sync instead of
+        // showing the parameter defaults.
+        fPlugin = static_cast<const clap_plugin_t*>(getPluginInstancePointer());
         for (uint32_t i = 0; i < kParamCount; ++i)
-            fValues[i] = kParams[i].def;
+            fValues[i] = fPlugin != nullptr ? static_cast<float>(ss_param_value(fPlugin, i))
+                                            : kParams[i].def;
 
         fSpectrum = std::make_unique<ModalSpectrum>(this);
         fLogo = std::make_unique<Logo>(this, EmbeddedResources::Unlikelyware_Final_ColorData,
@@ -211,8 +223,8 @@ public:
                 auto d = std::make_unique<Dropdown>(g, this);
                 d->setId(i);
                 d->setLabel(kParams[i].name);
-                d->setChoices(choicesFor(i));
-                d->setIndex(static_cast<int>(kParams[i].def));
+                d->setChoices(choicesForWidget(i));
+                d->setIndex(static_cast<int>(fValues[i] + 0.5f));   // fValues came from the seam
                 g->addControl(d.get());
                 fDropdowns[i] = std::move(d);
             }
@@ -224,7 +236,7 @@ public:
                 k->setLabel(s.name);
                 k->setAccentColor(accentFor(i));
                 k->configure(s.min, s.max, s.logarithmic, s.def);
-                k->setRealValue(s.def, false);
+                k->setRealValue(fValues[i], false);                 // fValues came from the seam
                 k->setFormatter(formatterFor(i));
                 g->addControl(k.get());
                 fKnobs[i] = std::move(k);
@@ -476,27 +488,14 @@ private:
         }
     }
 
-    static bool isDropdownParam(uint32_t i)
+    // The label lists live in StruckSynthParams.h so the CLAP params extension reports exactly the
+    // same enums; this just adapts them to the widget's std::vector<std::string> shape.
+    static std::vector<std::string> choicesForWidget(uint32_t i)
     {
-        return i == kParamVoiceMode || i == kParamStrikeType || i == kParamContactMode
-            || i == kParamMaterial;
-    }
-
-    static std::vector<std::string> choicesFor(uint32_t i)
-    {
-        switch (i)
-        {
-        case kParamVoiceMode:  return { "Mono", "Poly" };
-        case kParamStrikeType: return { "Mallet", "Noise" };
-        case kParamContactMode:return { "Note-Rel", "Wall-Clk" };
-        case kParamMaterial:
-        {
-            std::vector<std::string> v;
-            for (const char* n : kMaterialNames) v.emplace_back(n);
-            return v;
-        }
-        default: return {};
-        }
+        std::vector<std::string> v;
+        for (const char* const* c = strucksynth::choicesFor(i); c != nullptr && *c != nullptr; ++c)
+            v.emplace_back(*c);
+        return v;
     }
 
     static bool affectsSpectrum(uint32_t i)
@@ -541,6 +540,7 @@ private:
     std::unique_ptr<PopupMenu>     fMenu;
     std::unique_ptr<Logo>          fLogo;
     std::unique_ptr<Dropdown>      fPresetDropdown;
+    const clap_plugin_t*           fPlugin = nullptr;   // the raw CLAP plugin (see plugin_gui.h)
     float                          fValues[kParamCount];
     bool                           fHasFont = false;
     bool                           fInitialSizeNudged = false;
@@ -556,6 +556,232 @@ private:
 UI* createUI()
 {
     return new StruckSynthUI();
+}
+
+// ================================================================================================
+// CLAP `gui` extension
+// ================================================================================================
+// Modelled on DPF's own ClapUI (DistrhoPluginCLAP.cpp) and PlainOldSynth's UI: gui_create() only
+// allocates a holder, because UIExporter cannot be constructed until the host hands us a parent
+// window in set_parent(). DPF is used purely as the GUI layer — the plugin itself is the raw CLAP
+// plugin in src/plugin.cpp, so parameter traffic crosses the C seam in plugin_gui.h rather than
+// DPF's plugin side.
+
+namespace {
+
+struct GuiState {
+    const clap_plugin_t* plugin = nullptr;
+    std::unique_ptr<UIExporter> exporter;
+    uintptr_t parentWindow = 0;
+    uint32_t width  = DISTRHO_UI_DEFAULT_WIDTH;
+    uint32_t height = DISTRHO_UI_DEFAULT_HEIGHT;
+    bool timerRegistered = false;
+    clap_id timerId = 0;
+};
+
+#ifdef __APPLE__
+constexpr const char* kWindowApi = CLAP_WINDOW_API_COCOA;
+#else
+constexpr const char* kWindowApi = CLAP_WINDOW_API_X11;
+#endif
+
+bool gui_is_api_supported(const clap_plugin_t*, const char* api, bool isFloating)
+{
+    return !isFloating && std::strcmp(api, kWindowApi) == 0;
+}
+
+bool gui_get_preferred_api(const clap_plugin_t*, const char** api, bool* isFloating)
+{
+    *api = kWindowApi;
+    *isFloating = false;
+    return true;
+}
+
+bool gui_create(const clap_plugin_t* plugin, const char* api, bool isFloating)
+{
+    if (!gui_is_api_supported(plugin, api, isFloating)) return false;
+    auto* gui = new GuiState();
+    gui->plugin = plugin;
+    ss_plugin_set_gui(plugin, gui);   // plugin.cpp owns the pointer and hands it back to us
+    return true;
+}
+
+void gui_destroy(const clap_plugin_t* plugin)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    ss_plugin_set_gui(plugin, nullptr);
+    if (gui == nullptr) return;
+
+    if (gui->timerRegistered) {
+        const clap_host_t* host = ss_plugin_host(plugin);
+        const auto* timer = static_cast<const clap_host_timer_support_t*>(
+            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+        if (timer != nullptr) timer->unregister_timer(host, gui->timerId);
+    }
+    delete gui;   // the UIExporter is destroyed here, which tears the UI down
+}
+
+// The UIExporter's edit/set callbacks. `ptr` is whatever was passed as UIExporter's first argument —
+// we pass the clap_plugin_t, so these forward straight into the seam.
+void onEditParam(void* ptr, uint32_t index, bool started)
+{
+    const auto* plugin = static_cast<const clap_plugin_t*>(ptr);
+    if (started) ss_param_begin_gesture(plugin, index);
+    else         ss_param_end_gesture(plugin, index);
+}
+
+void onSetParam(void* ptr, uint32_t index, float value)
+{
+    ss_param_set_from_gui(static_cast<const clap_plugin_t*>(ptr), index, double(value));
+}
+
+bool gui_set_scale(const clap_plugin_t*, double) { return false; }   // logical size API (cocoa): no-op
+
+bool gui_get_size(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui == nullptr) return false;
+    if (gui->exporter) {
+        // CLAP_WINDOW_API_COCOA reports logical points while UIExporter::getWidth/Height() are
+        // physical pixels on Retina; dividing by the scale factor is what DPF's own ClapUI::getSize()
+        // does, and skipping it makes the host allocate a container twice too large.
+        const double scale = gui->exporter->getScaleFactor();
+        *width  = uint32_t(gui->exporter->getWidth()  / scale);
+        *height = uint32_t(gui->exporter->getHeight() / scale);
+    } else {
+        *width  = gui->width;
+        *height = gui->height;
+    }
+    return true;
+}
+
+bool gui_can_resize(const clap_plugin_t*) { return true; }
+
+bool gui_get_resize_hints(const clap_plugin_t*, clap_gui_resize_hints_t* hints)
+{
+    // The UI locks the 1080:640 design ratio via setGeometryConstraints(), so tell the host the same.
+    hints->can_resize_horizontally = true;
+    hints->can_resize_vertically   = true;
+    hints->preserve_aspect_ratio   = true;
+    hints->aspect_ratio_width      = DISTRHO_UI_DEFAULT_WIDTH;
+    hints->aspect_ratio_height     = DISTRHO_UI_DEFAULT_HEIGHT;
+    return true;
+}
+
+bool gui_adjust_size(const clap_plugin_t*, uint32_t*, uint32_t*) { return true; }   // accept as-is
+
+bool gui_set_size(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui == nullptr) return false;
+    gui->width  = width;
+    gui->height = height;
+    if (gui->exporter) {
+        // Host sizes are logical points; UIExporter wants physical pixels (see gui_get_size).
+        const double scale = gui->exporter->getScaleFactor();
+        gui->exporter->setWindowSizeFromHost(uint(width * scale), uint(height * scale));
+    }
+    return true;
+}
+
+bool gui_set_parent(const clap_plugin_t* plugin, const clap_window_t* window)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui == nullptr || std::strcmp(window->api, kWindowApi) != 0) return false;
+
+    // cocoa is a void*, x11 is already an integer handle — hence the different casts.
+#ifdef __APPLE__
+    gui->parentWindow = reinterpret_cast<uintptr_t>(window->cocoa);
+#else
+    gui->parentWindow = static_cast<uintptr_t>(window->x11);
+#endif
+
+    if (!gui->exporter) {
+        gui->exporter.reset(new UIExporter(
+            const_cast<clap_plugin_t*>(plugin),   // callbacksPtr → the edit/set callbacks above
+            gui->parentWindow,                    // winId: the host's embed target
+            DEFAULT_SAMPLE_RATE,                  // the UI does not need the real rate
+            onEditParam, onSetParam,
+            nullptr, nullptr, nullptr, nullptr,   // state / note / size / file callbacks: unused
+            nullptr,                              // bundlePath
+            const_cast<clap_plugin_t*>(plugin),   // dspPtr → UI::getPluginInstancePointer()
+            0.0,                                  // scaleFactor: 0 = auto
+            // kTypeClassic, not kTypeAuto: matches DPF's own CLAP wrapper for this embedded case.
+            DGL_NAMESPACE::Application::kTypeClassic));
+    }
+    return true;
+}
+
+bool gui_set_transient(const clap_plugin_t*, const clap_window_t*) { return false; }   // embedded only
+
+void gui_suggest_title(const clap_plugin_t*, const char*) {}
+
+bool gui_show(const clap_plugin_t* plugin)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui == nullptr || !gui->exporter) return false;
+
+    if (!gui->timerRegistered) {
+        const clap_host_t* host = ss_plugin_host(plugin);
+        const auto* timer = static_cast<const clap_host_timer_support_t*>(
+            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+        if (timer != nullptr && timer->register_timer(host, 16 /* ~60fps */, &gui->timerId))
+            gui->timerRegistered = true;
+    }
+    return true;
+}
+
+bool gui_hide(const clap_plugin_t* plugin)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui == nullptr || !gui->exporter) return false;
+
+    if (gui->timerRegistered) {
+        const clap_host_t* host = ss_plugin_host(plugin);
+        const auto* timer = static_cast<const clap_host_timer_support_t*>(
+            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+        if (timer != nullptr) timer->unregister_timer(host, gui->timerId);
+        gui->timerRegistered = false;
+    }
+    return true;
+}
+
+const clap_plugin_gui_t kGui = {
+    .is_api_supported  = gui_is_api_supported,
+    .get_preferred_api = gui_get_preferred_api,
+    .create            = gui_create,
+    .destroy           = gui_destroy,
+    .set_scale         = gui_set_scale,
+    .get_size          = gui_get_size,
+    .can_resize        = gui_can_resize,
+    .get_resize_hints  = gui_get_resize_hints,
+    .adjust_size       = gui_adjust_size,
+    .set_size          = gui_set_size,
+    .set_parent        = gui_set_parent,
+    .set_transient     = gui_set_transient,
+    .suggest_title     = gui_suggest_title,
+    .show              = gui_show,
+    .hide              = gui_hide,
+};
+
+} // namespace
+
+extern "C" const clap_plugin_gui_t* ss_gui_extension(void) { return &kGui; }
+
+// Host automation → an open editor. Called on the main thread by plugin.cpp.
+extern "C" void ss_gui_push_param(void* guiPtr, uint32_t index, double value)
+{
+    auto* gui = static_cast<GuiState*>(guiPtr);
+    if (gui != nullptr && gui->exporter)
+        gui->exporter->parameterChanged(index, float(value));
+}
+
+// CLAP timer-support → pump the DPF/pugl event loop (see this file's header comment).
+extern "C" void ss_gui_on_timer(const clap_plugin_t* plugin, clap_id)
+{
+    auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
+    if (gui != nullptr && gui->exporter)
+        gui->exporter->plugin_idle();
 }
 
 END_NAMESPACE_DISTRHO

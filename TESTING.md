@@ -62,7 +62,7 @@ Validate the built plugin against the CLAP spec with
 [`clap-validator`](https://github.com/free-audio/clap-validator):
 
 ```sh
-clap-validator validate build/bin/StruckSynth.clap
+clap-validator validate build/StruckSynth.clap
 ```
 
 ## Continuous integration

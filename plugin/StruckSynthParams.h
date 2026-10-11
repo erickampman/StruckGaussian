@@ -6,6 +6,8 @@
 #ifndef STRUCKSYNTH_PARAMS_H
 #define STRUCKSYNTH_PARAMS_H
 
+#include <cstdint>
+
 namespace strucksynth {
 
 enum ParamIndex {
@@ -76,13 +78,37 @@ static constexpr ParamSpec kParams[kParamCount] = {
    {"Brightness", "bright",   "",    -1.0f,  1.0f,   0.0f,  false, false},
 };
 
-// Material picker labels (order matches ModalBankMaterial in pm_params.h).
+// Material picker labels (order matches ModalBankMaterial in pm_params.h). Null-terminated so the
+// CLAP params extension and the UI dropdown can walk it without a separate count.
 static constexpr const char* kMaterialNames[] = {
    "String", "Bar", "Tuned Bar", "Membrane", "Open Tube", "Closed Tube", "Tine", "Bell",
    "Guitar Body", "Violin Body", "Soundboard", "Generic Body",
    "Harmonic", "Octave", "Fibonacci", "Prime", "Triangular", "Tetrahedral", "Partition",
    "Golden", "Silver", "Piano", "Power", "Sqrt", "Box 3D", "Harmonic #",
+   nullptr,
 };
+
+// --- dropdowns -------------------------------------------------------------------------------
+// One source of truth for "is this parameter stepped-with-labels, and what are the labels": the
+// CLAP params extension (CLAP_PARAM_IS_ENUM + value/text conversion) and the UI dropdowns both read
+// it from here, so a label can never drift between the host's generic panel and our own.
+
+static constexpr const char* kVoiceModeChoices[]   = { "Mono", "Poly",      nullptr };
+static constexpr const char* kStrikeTypeChoices[]  = { "Mallet", "Noise",   nullptr };
+static constexpr const char* kContactModeChoices[] = { "Note-Rel", "Wall-Clk", nullptr };
+
+inline const char* const* choicesFor(uint32_t index)
+{
+   switch (index) {
+   case kParamVoiceMode:   return kVoiceModeChoices;
+   case kParamStrikeType:  return kStrikeTypeChoices;
+   case kParamContactMode: return kContactModeChoices;
+   case kParamMaterial:    return kMaterialNames;
+   default:                return nullptr;
+   }
+}
+
+inline bool isDropdownParam(uint32_t index) { return choicesFor(index) != nullptr; }
 
 } // namespace strucksynth
 
