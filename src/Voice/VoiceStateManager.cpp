@@ -119,9 +119,8 @@ bool VoiceStateManager::handleMIDIMessage(const pm::UmpMessage& message, uint32_
         // MPE "control of a note ceases once Note Off has occurred" (§3.3.3), and the same holds for
         // MIDI 2.0 per-note messages, so a sender that centres a note's bend after its note-off does
         // not swoop the ringing tail. (Re-striking the key revives this same voice as a new note,
-        // which takes expression again.) A CLAP note named by
-        // its note id is the exception: the id is unambiguous, and the host keeps a note's expression
-        // going until it sees CLAP_EVENT_NOTE_END.
+        // which takes expression again.) A CLAP note named by its note id is the exception: the id is
+        // unambiguous, and the host keeps a note's expression going until it sees CLAP_EVENT_NOTE_END.
         if (isReleased() && !(message.noteId >= 0 && currentNoteOn->noteId >= 0))
             return false;
         return true;
