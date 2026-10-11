@@ -120,7 +120,8 @@ pm::UmpMessage noteOff(uint8_t note, uint8_t channel = 0) {
    return makeUmp(pm::kStatusNoteOff, channel, note, 0, 0);
 }
 uint32_t bendWord(double semitones, double range) {
-   return uint32_t(std::llround(2147483648.0 + semitones / range * 2147483648.0));
+   const double word = std::round(2147483648.0 + semitones / range * 2147483648.0);
+   return word >= 4294967295.0 ? 0xFFFFFFFFu : word <= 0.0 ? 0u : uint32_t(word);   // full scale up / down
 }
 // Most checks bend further than the ±2 default, so they first announce ±48 with perNoteRange().
 pm::UmpMessage perNoteBend(uint8_t note, double semitones, uint8_t channel = 0, double range = 48.0) {
@@ -636,6 +637,96 @@ void testVelocity() {
    }
 }
 
+// --- after note-off: MPE §3.3.3, "control of a note ceases once Note Off has occurred" -----------
+// A struck note rings for seconds after its note-off. Senders (mpe-sender included) centre a member
+// channel's bend right after the note-off to ready it for the next note; the ringing tail must not
+// follow. The master channel's bend still applies. Measured on the tail, after the change.
+void testReleasedNotes() {
+   std::printf("Released notes (MPE §3.3.3):\n");
+   auto close = [](double a, double b) { return std::fabs(a - b) < 0.01; };
+   auto tailSemitones = [](VoiceManager& vm) {
+      const double f = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+      return 12.0 * std::log2(f / pm::noteToFrequency(60));
+   };
+   auto fresh = [](bool mpe) {
+      auto vm = std::make_unique<VoiceManager>(kSampleRate, kBlock);
+      configure(*vm);
+      setMpe(*vm, mpe);
+      return vm;
+   };
+   {  // samekey's ending: up an octave, note-off, then the channel is centred.
+      auto vm = fresh(true);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x95, 60, 100));
+      vm->handleMIDIMessage(midi1Bend(5, 8192 + 2048));             // +12 at ±48
+      render(*vm, 4096);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x85, 60, 0));
+      vm->handleMIDIMessage(midi1Bend(5, 8192));                    // same instant as the note-off
+      const double tail = tailSemitones(*vm);
+      check(close(tail, 12.0), "MPE on: centring the member channel after note-off leaves the tail at +12 ("
+                                   + num(tail) + ")");
+      vm->handleMIDIMessage(midi1Bend(0, 8192 + 4096));             // master: +1 at ±2
+      render(*vm, 4096);
+      const double withWheel = tailSemitones(*vm);
+      check(close(withWheel, 13.0), "...and the master channel's bend still moves it (+13: " + num(withWheel) + ")");
+   }
+   {  // MPE off: an ordinary pitch wheel bends a releasing note.
+      auto vm = fresh(false);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      vm->handleMIDIMessage(midi1Bend(0, 8192 + 4096));             // +1 at ±2
+      render(*vm, 4096);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x80, 60, 0));
+      vm->handleMIDIMessage(midi1Bend(0, 8192));
+      render(*vm, 4096);
+      const double tail = tailSemitones(*vm);
+      check(close(tail, 0.0), "MPE off: the tail follows its channel's bend back to centre (" + num(tail) + ")");
+   }
+   {  // A note the pedal is holding has had its note-off: it freezes too.
+      auto vm = fresh(true);
+      vm->handleMIDIMessage(midi1CC(0, 64, 127));
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x92, 60, 100));
+      vm->handleMIDIMessage(midi1Bend(2, 8192 + 2048));             // +12 at ±48
+      render(*vm, 4096);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x82, 60, 0));       // deferred by the pedal
+      vm->handleMIDIMessage(midi1Bend(2, 8192));
+      const double tail = tailSemitones(*vm);
+      check(close(tail, 12.0), "MPE on: a pedal-held note keeps its bend when the channel is centred (" + num(tail) + ")");
+   }
+   {  // MIDI 2.0: a sender centring a note's per-note bend after its note-off must not swoop the tail.
+      auto vm = fresh(false);
+      vm->handleMIDIMessage(noteOn(60));
+      vm->handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));          // +1
+      render(*vm, 4096);
+      vm->handleMIDIMessage(noteOff(60));
+      vm->handleMIDIMessage(perNoteBend(60, 0.0, 0, 2.0));          // centred, after the note-off
+      const double tail = tailSemitones(*vm);
+      check(close(tail, 1.0), "MIDI 2.0: a per-note bend after note-off leaves the tail at +1 (" + num(tail) + ")");
+   }
+   {  // Re-striking a ringing key strikes the same bank again (one voice), so that note takes the bend.
+      auto vm = fresh(false);
+      vm->handleMIDIMessage(noteOn(60));
+      vm->handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));
+      render(*vm, 4096);
+      vm->handleMIDIMessage(noteOff(60));
+      vm->handleMIDIMessage(noteOn(60));
+      vm->handleMIDIMessage(perNoteBend(60, 2.0, 0, 2.0));          // full scale: +2
+      const double restruck = tailSemitones(*vm);
+      check(vm->activeCount() == 1 && close(restruck, 2.0),
+            "re-striking the ringing key reuses its voice, which follows the new note's bend (" + num(restruck) + ")");
+   }
+   {  // A CLAP note addressed by its note id still takes expression after its note-off.
+      auto vm = fresh(false);
+      pm::UmpMessage on = noteOn(60);  on.noteId = 9;
+      pm::UmpMessage off = noteOff(60); off.noteId = 9;
+      pm::UmpMessage tune = pitch725(60, 67.0); tune.noteId = 9;
+      vm->handleMIDIMessage(on);
+      render(*vm, 4096);
+      vm->handleMIDIMessage(off);
+      vm->handleMIDIMessage(tune);
+      const double tail = tailSemitones(*vm);
+      check(close(tail, 7.0), "CLAP: an id-addressed tuning still reaches the released note (" + num(tail) + ")");
+   }
+}
+
 // --- channel mode messages: CC 123 All Notes Off, CC 120 All Sound Off ------------------------------
 void testChannelModeMessages() {
    std::printf("All Notes Off / All Sound Off:\n");
@@ -746,6 +837,7 @@ int main() {
    testMpe();
    testVelocity();
    testChannelModeMessages();
+   testReleasedNotes();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

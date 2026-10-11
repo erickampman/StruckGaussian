@@ -355,6 +355,12 @@ public:
 
     PitchConverter* pitchConverter = nullptr;
 
+    // Whether the note this module's voice plays has been released: note-off received, or held only
+    // by the sustain pedal. Set by Voice::syncNoteReleased before each MIDI message reaches the
+    // modules, so it is current when a message right after the note-off arrives. The pitch-bend
+    // module reads it to freeze an MPE member channel's bend at release (MPE §3.3.3: control of a
+    // note ceases once Note Off has occurred).
+    bool noteReleased = false;
 };
 
 #endif /* Module_h */

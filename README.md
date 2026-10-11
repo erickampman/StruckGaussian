@@ -61,6 +61,12 @@ The **MPE** switch (Global panel, off by default) treats input as an MPE lower z
   to every member note, so the controller's pitch wheel moves the whole zone on top of each note's
   own slide.
 - RPN 0 on any member channel sets every member channel's range, as MPE specifies.
+- **Released notes keep their pitch.** MPE §3.3.3: "control of a note ceases once Note Off has
+  occurred". A struck note rings for seconds after its note-off, so when a sender centres the member
+  channel for its next note, the tail stays where it was; only the master channel's bend still moves
+  it. A pedal-held note counts as released. With MPE off, an ordinary pitch wheel still bends
+  releasing notes. The same goes for MIDI 2.0 per-note messages: a released note stops taking them,
+  except CLAP expressions addressed by note id, which last until the note's `CLAP_EVENT_NOTE_END`.
 - Ranges set by RPN 0 go back to their defaults on an MPE Configuration Message (RPN 6 on channel 1
   or 16; only its reset is honoured, the zone layout is the switch's) and when the switch is flipped,
   so a range set in one mode does not leak into the other. Otherwise, like RC 7, they survive a host
