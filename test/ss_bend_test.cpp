@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -450,6 +451,144 @@ void testHoldsNote() {
    check(!steal.holdsNote(noteOn(60)) && steal.holdsNote(noteOn(67)), "the stolen note ends once the steal completes");
 }
 
+// --- MPE (lower zone: master channel 1, members 2..16) and RPN 0 --------------------------------
+// Ported from PlainOldSynth's smoke test (bend only: StruckSynth has no pressure / timbre sources).
+
+void setMpe(VoiceManager& vm, bool on) {
+   vm.setParameter(MODULE_PARAM_ADDRESS(ModuleParamKindPitchBendConverter, ModuleInstance1,
+                                        PitchBendConverterParamItemMPE), on ? 1.0f : 0.0f);
+}
+pm::UmpMessage midi1Bend(uint8_t channel, uint32_t value14) {
+   return pm::fromMidi1Bytes(uint8_t(0xE0 | channel), uint8_t(value14 & 0x7F), uint8_t(value14 >> 7));
+}
+pm::UmpMessage midi1CC(uint8_t channel, uint8_t cc, uint8_t value) {
+   return pm::fromMidi1Bytes(uint8_t(0xB0 | channel), cc, value);
+}
+void rpn0(VoiceManager& vm, uint8_t channel, uint8_t semis) {
+   vm.handleMIDIMessage(midi1CC(channel, 101, 0)); vm.handleMIDIMessage(midi1CC(channel, 100, 0));
+   vm.handleMIDIMessage(midi1CC(channel, 6, semis)); vm.handleMIDIMessage(midi1CC(channel, 38, 0));
+   vm.handleMIDIMessage(midi1CC(channel, 101, 127)); vm.handleMIDIMessage(midi1CC(channel, 100, 127));
+}
+void mpeConfiguration(VoiceManager& vm) {   // RPN 6 on the master channel, 15 member channels
+   vm.handleMIDIMessage(midi1CC(0, 101, 0)); vm.handleMIDIMessage(midi1CC(0, 100, 6));
+   vm.handleMIDIMessage(midi1CC(0, 6, 15));
+   vm.handleMIDIMessage(midi1CC(0, 101, 127)); vm.handleMIDIMessage(midi1CC(0, 100, 127));
+}
+// Play C4 on `channel` and return how far it sounds from C4, in semitones.
+double semitonesFromC4(VoiceManager& vm, uint8_t channel) {
+   vm.handleMIDIMessage(pm::fromMidi1Bytes(uint8_t(0x90 | channel), 60, 100));
+   const double f = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+   return 12.0 * std::log2(f / pm::noteToFrequency(60));
+}
+
+void testMpe() {
+   std::printf("MPE and RPN 0:\n");
+   auto close = [](double a, double b) { return std::fabs(a - b) < 0.01; };
+   const uint8_t kMaster = 0, kMember = 1, kMember2 = 2;   // channels 1, 2, 3
+   auto fresh = [](bool mpe) {
+      auto vm = std::make_unique<VoiceManager>(kSampleRate, kBlock);
+      configure(*vm);
+      setMpe(*vm, mpe);
+      return vm;
+   };
+
+   {  // A member-channel bend meant as +3 at ±48 (8192 + 512).
+      auto off = fresh(false);
+      off->handleMIDIMessage(midi1Bend(kMember, 8192 + 512));
+      const double o = semitonesFromC4(*off, kMember);
+      check(close(o, 0.125), "MPE off: that bend is read at ±2, i.e. +0.125 st (" + num(o) + ")");
+      auto on = fresh(true);
+      on->handleMIDIMessage(midi1Bend(kMember, 8192 + 512));
+      const double n = semitonesFromC4(*on, kMember);
+      check(close(n, 3.0), "MPE on: a member channel bends at ±48, i.e. +3 st (" + num(n) + ")");
+   }
+   {  // The master channel's bend (±2) adds to every member note's own.
+      auto vm = fresh(true);
+      vm->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));   // +1 st at ±2
+      vm->handleMIDIMessage(midi1Bend(kMember, 8192 + 512));    // +3 st at ±48
+      const double both = semitonesFromC4(*vm, kMember);
+      check(close(both, 4.0), "MPE on: master +1 st plus member +3 st = +4 st (" + num(both) + ")");
+      auto plain = fresh(false);
+      plain->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));
+      const double none = semitonesFromC4(*plain, kMember);
+      check(close(none, 0.0), "MPE off: a channel-1 bend leaves a channel-2 note alone (" + num(none) + ")");
+   }
+   {  // RPN 0 outside MPE: ±12, then half way up.
+      auto vm = fresh(false);
+      rpn0(*vm, kMaster, 12);
+      vm->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));
+      const double half = semitonesFromC4(*vm, kMaster);
+      check(close(half, 6.0), "RPN 0 sets the bend range: half way up at ±12 is +6 st (" + num(half) + ")");
+   }
+   {  // MPE: RPN 0 on one member channel sets every member channel.
+      auto vm = fresh(true);
+      rpn0(*vm, kMember, 24);
+      vm->handleMIDIMessage(midi1Bend(kMember2, 8192 + 1024));   // +3 st at ±24
+      const double other = semitonesFromC4(*vm, kMember2);
+      check(close(other, 3.0), "MPE on: RPN 0 = 24 sent on channel 2 also sets channel 3 (" + num(other) + ")");
+   }
+   {  // MIDI 2.0 RPN 0 (registered controller, bank 0 index 0).
+      auto vm = fresh(false);
+      vm->handleMIDIMessage(makeUmp(pm::kStatusRegController, kMaster, 0, 0, 12u << 25));
+      vm->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));
+      const double half = semitonesFromC4(*vm, kMaster);
+      check(close(half, 6.0), "MIDI 2.0 RPN 0 sets the bend range too (" + num(half) + ")");
+   }
+   {  // RPN 0 is configuration: it survives a host reset, like RC 7.
+      auto vm = fresh(false);
+      rpn0(*vm, kMaster, 12);
+      vm->reset();
+      vm->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));
+      const double half = semitonesFromC4(*vm, kMaster);
+      check(close(half, 6.0), "the RPN 0 range survives a reset (" + num(half) + ")");
+   }
+   {  // The MPE Configuration Message puts set ranges back to default.
+      auto vm = fresh(false);
+      rpn0(*vm, kMaster, 12);
+      mpeConfiguration(*vm);
+      vm->handleMIDIMessage(midi1Bend(kMaster, 8192 + 4096));
+      const double half = semitonesFromC4(*vm, kMaster);
+      check(close(half, 1.0), "the MPE Configuration Message resets the range to ±2 (" + num(half) + ")");
+   }
+   {  // So does flipping the switch: a range set under MPE must not leak into non-MPE play.
+      auto vm = fresh(true);
+      rpn0(*vm, kMember, 48);
+      render(*vm, 512);
+      setMpe(*vm, false);
+      vm->handleMIDIMessage(midi1Bend(kMember2, 8192 + 4096));
+      const double half = semitonesFromC4(*vm, kMember2);
+      check(close(half, 1.0), "turning MPE off drops member ranges back to ±2 (" + num(half) + ")");
+   }
+   {  // mpe-sender's sequence: MPE-on "rpn", its reset, switch off, then "samekey" and "rpn".
+      auto vm = fresh(true);
+      rpn0(*vm, kMember, 24);
+      render(*vm, 2048);
+      mpeConfiguration(*vm);
+      setMpe(*vm, false);
+      render(*vm, 2048);
+      vm->handleMIDIMessage(midi1Bend(5, 8192 + 2048));
+      const double samekey = semitonesFromC4(*vm, 5);
+      check(close(samekey, 0.5), "sender sequence, MPE off: samekey's bend reads at ±2 (" + num(samekey) + ")");
+      // Let samekey's note ring out (a struck note outlives its note-off) before measuring the next.
+      setBank(*vm, ModalBankParamItemDecayT60, 0.05f);
+      vm->allNotesOff();
+      render(*vm, uint32_t(kSampleRate));
+      setBank(*vm, ModalBankParamItemDecayT60, 60.0f);
+      rpn0(*vm, kMember, 24);
+      vm->handleMIDIMessage(midi1Bend(kMember2, 8192 + 4096));
+      const double rpnOff = semitonesFromC4(*vm, kMember2);
+      check(close(rpnOff, 1.0), "sender sequence, MPE off: rpn leaves channel 3 at ±2 (" + num(rpnOff) + ")");
+   }
+   {  // A MIDI 2.0 per-note bend on a member channel follows that channel's range: ±48 under MPE.
+      auto vm = fresh(true);
+      vm->handleMIDIMessage(noteOn(60, kMember));
+      vm->handleMIDIMessage(perNoteBend(60, 3.0, kMember, 48.0));
+      const double f = estimateFrequency(render(*vm, uint32_t(kSampleRate)));
+      const double st = 12.0 * std::log2(f / pm::noteToFrequency(60));
+      check(close(st, 3.0), "MPE on: a per-note bend on a member channel is at ±48 (" + num(st) + ")");
+   }
+}
+
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
 void testGeneratedNoteOffsMatchChannel() {
@@ -500,6 +639,7 @@ int main() {
    testNoteIds();
    testClapNoteExpressionConversion();
    testHoldsNote();
+   testMpe();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

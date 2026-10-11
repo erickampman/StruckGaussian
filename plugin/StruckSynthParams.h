@@ -37,6 +37,8 @@ enum ParamIndex {
    // --- ModalBank: timbre ---
    kParamStrikePosition,    // 0..1; 0.5 cancels even modes
    kParamBrightness,        // amplitude tilt across modes
+   // --- Appended (CLAP ids are indexes, so new params go last) ---
+   kParamMpe,               // MPE input, lower zone: member bend ±48 + the master channel's bend
    kParamCount
 };
 
@@ -77,6 +79,8 @@ static constexpr ParamSpec kParams[kParamCount] = {
    // ModalBank: timbre
    {"Strike Pos", "strkPos",  "",    0.0f,   1.0f,   0.25f, false, false},
    {"Brightness", "bright",   "",    -1.0f,  1.0f,   0.0f,  false, false},
+   // Appended
+   {"MPE",        "mpe",      "",    0.0f,   1.0f,   0.0f,  false, true },
 };
 
 // Material picker labels (order matches ModalBankMaterial in pm_params.h). Null-terminated so the
@@ -110,7 +114,8 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
               && symbolIs(kParamStretch, "stretch") && symbolIs(kParamDecayT60, "decay")
               && symbolIs(kParamDampTilt, "dampTilt") && symbolIs(kParamDampBellAmount, "bellAmt")
               && symbolIs(kParamDampBellCentre, "bellCtr") && symbolIs(kParamDampBellWidth, "bellWid")
-              && symbolIs(kParamStrikePosition, "strkPos") && symbolIs(kParamBrightness, "bright"),
+              && symbolIs(kParamStrikePosition, "strkPos") && symbolIs(kParamBrightness, "bright")
+              && symbolIs(kParamMpe, "mpe"),
               "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------
@@ -121,6 +126,7 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
 static constexpr const char* kVoiceModeChoices[]   = { "Mono", "Poly",      nullptr };
 static constexpr const char* kStrikeTypeChoices[]  = { "Mallet", "Noise",   nullptr };
 static constexpr const char* kContactModeChoices[] = { "Note-Rel", "Wall-Clk", nullptr };
+static constexpr const char* kMpeChoices[]         = { "Off", "On",         nullptr };
 
 inline const char* const* choicesFor(uint32_t index)
 {
@@ -128,6 +134,7 @@ inline const char* const* choicesFor(uint32_t index)
    case kParamVoiceMode:   return kVoiceModeChoices;
    case kParamStrikeType:  return kStrikeTypeChoices;
    case kParamContactMode: return kContactModeChoices;
+   case kParamMpe:         return kMpeChoices;
    case kParamMaterial:    return kMaterialNames;
    default:                return nullptr;
    }

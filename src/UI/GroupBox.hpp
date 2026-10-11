@@ -43,6 +43,7 @@ public:
 
     // Register a control (already parented to this box) for row layout.
     void addControl(SubWidget* control) { fControls.push_back(control); }
+    int  controlCount() const { return static_cast<int>(fControls.size()); }
 
     // The inner content rectangle (window-absolute), below the title strip and inside padding.
     // For panels that lay their children out themselves rather than via relayout().

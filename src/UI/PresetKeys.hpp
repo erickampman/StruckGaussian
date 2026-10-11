@@ -37,6 +37,9 @@ static constexpr PresetKey kPresetKeys[kParamCount] = {
    /*DampBellWidth*/   {"ModalBank", "dampBellWidth"},
    /*StrikePosition*/  {"ModalBank", "strikePosition"},
    /*Brightness*/      {"ModalBank", "brightness"},
+   // MPE describes the controller, not the sound: factory presets leave it out, and the loader keeps
+   // the current value for any key a preset does not mention.
+   /*Mpe*/             {"Global",    "mpe"},
 };
 
 } // namespace strucksynth

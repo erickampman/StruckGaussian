@@ -703,6 +703,42 @@ int main(int argc, char** argv) {
               "an expression naming only the note id reaches that note (+7 semitones)");
     }
 
+    // --- MPE switch through the real plugin ---------------------------------------------------------
+    // The same member-channel bend (+3 at ±48) with the switch off and on: the parameter must reach the
+    // engine, and it must be a two-state Off/On enum.
+    std::printf("MPE switch:\n");
+    {
+        Instance probe;
+        if (probe.create(lib)) {
+            const auto* params = static_cast<const clap_plugin_params_t*>(
+                probe.plugin->get_extension(probe.plugin, CLAP_EXT_PARAMS));
+            clap_param_info_t info{};
+            char text[64] = {};
+            check(params != nullptr && params->get_info(probe.plugin, kParamMpe, &info)
+                      && (info.flags & CLAP_PARAM_IS_ENUM) != 0 && info.default_value == 0.0
+                      && params->value_to_text(probe.plugin, kParamMpe, 1.0, text, sizeof(text))
+                      && std::string(text) == "On",
+                  "MPE is an Off/On enum parameter, off by default");
+            probe.destroy();
+        }
+        auto memberBend = [&](bool mpe) {
+            Instance inst;
+            if (!inst.create(lib)) return 0.0;
+            installTestPatch(inst.plugin);
+            sendParam(inst.plugin, kParamMpe, mpe ? 1.0 : 0.0);
+            const clap_event_midi_t bend = makeMidi1(0xE1, 0x00, 0x44);        // 8192 + 512, channel 2
+            const clap_event_midi_t noteOn = makeMidi1(0x91, uint8_t(kNote), 100);
+            const clap_event_header_t* events[] = { &bend.header, &noteOn.header };
+            const std::vector<float> audio = render(inst.plugin, uint32_t(kSampleRate), events, 2);
+            inst.destroy();
+            return 12.0 * std::log2(estimatePitch(audio, 100.0, 2000.0) / hzZero);
+        };
+        const double off = memberBend(false), on = memberBend(true);
+        std::printf("        member bend: %.3f st with MPE off, %.3f st with MPE on\n", off, on);
+        check(std::fabs(off - 0.125) < 0.02 && std::fabs(on - 3.0) < 0.02,
+              "MPE on reads a member-channel bend at ±48 (+3 st), off at ±2 (+0.125 st)");
+    }
+
     // --- note end + voice-info ---------------------------------------------------------------------
     // A struck note rings on after note-off; CLAP_EVENT_NOTE_END must come when it falls silent, not
     // at the note-off, and only for notes that arrived as CLAP note events.

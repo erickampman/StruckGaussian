@@ -33,10 +33,11 @@ PlainOldSynth) feeding ModalBank's second pitch input. That input comes **after*
 never smears a bend, and it is scaled on its own, so a fixed-pitch body (Pitch Mod Level 0) still
 bends. It sums two bends:
 
-- **Channel pitch bend** (MIDI 1.0 or 2.0), **±2 semitones**. Each voice remembers the latest bend of
-  every channel and applies the one its own note was played on: ordinary pitch bend with everything on
-  one channel, and per-note bend when each note has its own channel (MPE-style). MPE's master-channel
-  bend is not implemented yet.
+- **Channel pitch bend** (MIDI 1.0 or 2.0), **±2 semitones** by default. Each voice remembers the
+  latest bend of every channel and applies the one its own note was played on: ordinary pitch bend
+  with everything on one channel, and per-note bend when each note has its own channel. **RPN 0**
+  (pitch bend sensitivity, as MIDI 1.0 CC 101/100/6/38 or a MIDI 2.0 registered controller) sets a
+  channel's range.
 - **MIDI 2.0 per-note pitch bend** (UMP status `0x6`). It bends only the note it names, over the same
   range as its channel's bend (**±2** by default): M2-104 v1.0 says per-note bend "acts like Pitch
   Bend in every way" and gives it no range of its own. A controller can set a separate per-note range
@@ -47,8 +48,25 @@ bends. It sums two bends:
 Bend changes ramp over 2 ms, and a note starts at its bent pitch. ModalBank retunes its modes once per
 block without resetting them, so a bend glides the ringing tail rather than re-striking it. Per-note
 bend resets on every note-on and on a per-note management Reset; one sent *before* its note-on is
-dropped, because no voice owns that note yet. The default range is not a host parameter yet, and
-RPN 0 (channel bend range) is not handled yet.
+dropped, because no voice owns that note yet. The default range is not a host parameter.
+
+### MPE
+
+The **MPE** switch (Global panel, off by default) treats input as an MPE lower zone: master channel
+1, member channels 2–16. MPE is accepted as an input only; StruckSynth never sends it.
+
+- A member channel's bend range defaults to **±48**, and the master channel's bend (±2) is **added**
+  to every member note, so the controller's pitch wheel moves the whole zone on top of each note's
+  own slide.
+- RPN 0 on any member channel sets every member channel's range, as MPE specifies.
+- Ranges set by RPN 0 go back to their defaults on an MPE Configuration Message (RPN 6 on channel 1
+  or 16; only its reset is honoured, the zone layout is the switch's) and when the switch is flipped,
+  so a range set in one mode does not leak into the other. Otherwise, like RC 7, they survive a host
+  `reset()`.
+- MPE's pressure and timbre (CC74) have no destination in StruckSynth yet.
+- Presets don't store the switch: it describes the controller, not the sound.
+
+`~/Dev-MIDI/mpe-sender` plays scripted MPE tests for listening.
 
 **A note is note number + channel + group.** The same key on two channels is two voices with
 independent per-note state, and note-offs the engine generates itself (sustain-pedal release,

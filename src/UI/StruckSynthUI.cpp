@@ -405,29 +405,34 @@ private:
         fPresetDropdown->setSize(static_cast<uint>(presetW), static_cast<uint>(presetH));
         fPresetDropdown->setAbsolutePos(W - M - presetW, static_cast<int>(4 * s));
 
-        // 2 columns × 3 rows under the header. The spectrum takes the top-left cell (where Global
-        // used to be); Global and Timbre move to the bottom row. Strike top-right, Object | Decay
-        // in the middle.
+        // 3 rows under the header, two panels per row. Within a row the width is split by the cells
+        // each panel needs (its control count), so controls get similar widths everywhere instead of a
+        // 2-control panel taking half the window. Top: spectrum | Strike. Middle: Object | Decay.
+        // Bottom: Global | Timbre.
         const int gridY = hdr;
         const int gridH = H - gridY - M;
         const int rowH  = (gridH - 2 * gap) / 3;
-        const int colW  = (W - 2 * M - gap) / 2;
-        const int col0  = M, col1 = M + colW + gap;
+        const int rowW  = W - 2 * M - gap;   // both panels of a row, without the gap between them
         const int row0  = gridY, row1 = gridY + rowH + gap, row2 = gridY + 2 * (rowH + gap);
 
-        fSpectrum->setAbsolutePos(col0, row0);
-        fSpectrum->setSize(colW, rowH);
-
-        auto place = [&](GroupBox* g, int x, int y) {
-            g->setUiScale(s);
-            g->setAbsolutePos(x, y);
-            g->setSize(colW, rowH);
+        auto cells = [](const GroupBox* g) { return std::max(1, g->controlCount()); };
+        // Lay out one row: `left` gets leftCells / (leftCells + rightCells) of the width.
+        auto placeRow = [&](SubWidget* left, int leftCells, SubWidget* right, int rightCells, int y) {
+            const int leftW = rowW * leftCells / (leftCells + rightCells);
+            left->setAbsolutePos(M, y);
+            left->setSize(static_cast<uint>(leftW), static_cast<uint>(rowH));
+            right->setAbsolutePos(M + leftW + gap, y);
+            right->setSize(static_cast<uint>(rowW - leftW), static_cast<uint>(rowH));
         };
-        place(fStrikeGroup.get(), col1, row0);
-        place(fObjectGroup.get(), col0, row1);
-        place(fDecayGroup.get(),  col1, row1);
-        place(fGlobalGroup.get(), col0, row2); // Global → bottom-left
-        place(fOutputGroup.get(), col1, row2); // Timbre → bottom-right
+        GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
+                                fDecayGroup.get(), fOutputGroup.get() };
+        for (GroupBox* g : panels) g->setUiScale(s);
+
+        // The spectrum holds no controls; it reads fine at about three control cells wide.
+        constexpr int kSpectrumCells = 3;
+        placeRow(fSpectrum.get(),    kSpectrumCells,           fStrikeGroup.get(), cells(fStrikeGroup.get()), row0);
+        placeRow(fObjectGroup.get(), cells(fObjectGroup.get()), fDecayGroup.get(), cells(fDecayGroup.get()),  row1);
+        placeRow(fGlobalGroup.get(), cells(fGlobalGroup.get()), fOutputGroup.get(), cells(fOutputGroup.get()), row2);
 
         // Knob diameter bounded by the row height (room for label + value) and, via relayout, the
         // cell width. Dropdowns are sized to their cell by relayout(); we only set their scale.
@@ -437,8 +442,6 @@ private:
             if (fKnobs[i])     fKnobs[i]->setDiameter(knobD, s);
             if (fDropdowns[i]) fDropdowns[i]->setUiScale(s);
         }
-        GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
-                                fDecayGroup.get(), fOutputGroup.get() };
         for (GroupBox* g : panels) g->relayout();
     }
 
@@ -454,7 +457,7 @@ private:
     {
         switch (i)
         {
-        case kParamVoiceMode: case kParamGlide: case kParamLevel: case kParamSpread:
+        case kParamVoiceMode: case kParamGlide: case kParamLevel: case kParamSpread: case kParamMpe:
             return fGlobalGroup.get();
         case kParamStrikeType: case kParamHardness: case kParamVelToLevel:
         case kParamVelToHardness: case kParamContactMode:
@@ -473,7 +476,7 @@ private:
     {
         switch (i)
         {
-        case kParamVoiceMode: case kParamGlide: case kParamLevel: case kParamSpread:
+        case kParamVoiceMode: case kParamGlide: case kParamLevel: case kParamSpread: case kParamMpe:
             return colGlobal();
         case kParamStrikeType: case kParamHardness: case kParamVelToLevel:
         case kParamVelToHardness: case kParamContactMode:
