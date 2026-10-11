@@ -21,6 +21,14 @@
 //    range this way and scales its bends to match. (RC 7 is not in M2-104 v1.0; it is from a later
 //    revision.) Unlike the rest of this state it survives reset(): it is configuration the
 //    controller sent once, not processing state, and some hosts call reset() on transport stop.
+//  - Pitch 7.25 (registered per-note controller #3): an absolute pitch for the sounding note, which
+//    both bends then offset, as M2-104 §4.2.14.2 specifies. Applied here as an offset from the note's
+//    own pitch (its note number, or its Pitch 7.9 attribute), so it too bypasses the glide.
+//    KeyboardEDO's glide mode sends it, and CLAP tuning note expressions arrive as it (clap_ump.h).
+//    The spec also makes it persistent state — a tuning table that later notes on that key inherit —
+//    which is NOT implemented: here it lasts for the sounding note only and resets on the next
+//    note-on and on per-note management Reset. CLAP tuning depends on that: it must not outlive its
+//    note, so a tuning table would need its own path.
 //  - De-zippering. Bend arrives as discrete events; a step in pitch is audible, so a change of target
 //    ramps linearly over kRampSeconds. Every note-on snaps instead: the note must start at its bent
 //    pitch, and in StruckSynth even a mono legato note re-strikes the bank, so there is no sounding
@@ -55,6 +63,8 @@ struct PitchBendConverterHelperStruct {
     float   channelBend[kGroups][kChannels] = {};   // -1..+1, last channel bend per group/channel
     float   perNoteRange[kGroups][kChannels];       // semitones from RC 7; < 0 = not set (param default)
     float   perNoteBend = 0.0f;                     // -1..+1, for the note this voice is playing
+    float   notePitch = 0.0f;                       // semitones: the note-on's note number or Pitch 7.9
+    float   perNoteTuning = 0.0f;                   // semitones from Pitch 7.25, relative to notePitch
     uint8_t group = 0, channel = 0;                 // where this voice's note was played
 
     float    current = 0.0f;     // octaves, as output
@@ -70,7 +80,8 @@ float targetOctaves(const PitchBendConverterHelperStruct& st, Module* module) {
     const float rc7 = st.perNoteRange[st.group][st.channel];
     const float perNoteSemis = rc7 >= 0.0f ? rc7 : channelSemis;   // no RC 7: like channel bend
     const float semis = st.channelBend[st.group][st.channel] * channelSemis
-                      + st.perNoteBend * perNoteSemis;
+                      + st.perNoteBend * perNoteSemis
+                      + st.perNoteTuning;
     return semis / 12.0f;
 }
 
@@ -142,6 +153,9 @@ void MIDIPitchBendConverter(const pm::UmpMessage& message, Module* module)
         st->group = group;
         st->channel = channel;
         st->perNoteBend = 0.0f;
+        st->perNoteTuning = 0.0f;
+        st->notePitch = message.attributeType == pm::kAttrPitch7_9 ? float(message.attribute) / 512.0f
+                                                                   : float(message.note);
         st->snap = true;
         break;
     case pm::kStatusPitchBend:
@@ -155,11 +169,15 @@ void MIDIPitchBendConverter(const pm::UmpMessage& message, Module* module)
             st->perNoteRange[group][channel] = float(data14 >> 7) + float(data14 & 0x7F) / 100.0f;
         }
         break;
+    case pm::kStatusRegPerNoteController:
+        if (message.ccIndex == pm::kRegPerNotePitch7_25)
+            st->perNoteTuning = float(double(message.ccData) / 33554432.0 - st->notePitch);
+        break;
     case pm::kStatusPerNotePitchBend:
         st->perNoteBend = float(pm::pitchBendToUnit(message.data32));
         break;
     case pm::kStatusPerNoteManagement:
-        if (message.optionFlags & pm::kPerNoteMgmtReset) st->perNoteBend = 0.0f;
+        if (message.optionFlags & pm::kPerNoteMgmtReset) st->perNoteBend = st->perNoteTuning = 0.0f;
         break;
     default:
         break;

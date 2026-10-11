@@ -53,7 +53,27 @@ RPN 0 (channel bend range) is not handled yet.
 **A note is note number + channel + group.** The same key on two channels is two voices with
 independent per-note state, and note-offs the engine generates itself (sustain-pedal release,
 all-notes-off, panic) are built from the voice's own note-on so they match. In mono, per-note
-expression for a held-but-silent note in the stack doesn't move the sounding note.
+expression for a held-but-silent note in the stack doesn't move the sounding note. When the host
+tags notes with CLAP note ids, the ids decide instead, so a re-struck key is a new note.
+
+### Pitch 7.25 and CLAP note expressions
+
+**Pitch 7.25** (MIDI 2.0 registered per-note controller #3) sets an absolute pitch for the sounding
+note, and both bends offset from it. Like the bends it bypasses the glide. KeyboardEDO's glide mode
+sends it. The spec also makes it persistent, a tuning table that later notes on the same key
+inherit; that is not implemented: it lasts for the sounding note and resets on the next note-on.
+
+**CLAP note expressions** (`CLAP_EVENT_NOTE_EXPRESSION`, how Bitwig sends per-note expression) are
+converted to MIDI 2.0 per-note messages:
+
+- **Tuning** becomes Pitch 7.25 at key + tuning, so it is exact at any size within Pitch 7.25's
+  0–128 semitone span rather than clamped to the ±2 bend range.
+- **Pressure** becomes poly pressure and **Brightness** registered per-note controller #74. Nothing
+  in StruckSynth responds to either yet; they are routed so a future modulation source can.
+- Volume, Pan, Vibrato and Expression are ignored.
+
+An expression may name only a note id: tuning then looks up that note's key. VST3 note expression
+(PlainOldSynth's clap-wrapper extension) does not apply: StruckSynth has no VST3 build.
 
 The [DISTRHO Plugin Framework (DPF)](https://github.com/DISTRHO/DPF) is used **only as the GUI
 layer** (UIExporter + NanoVG + pugl). The CLAP entry point is hand-written in `src/plugin.cpp`,

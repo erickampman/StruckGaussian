@@ -47,8 +47,8 @@ itself, and `clap-validator` (below) checks CLAP conformance:
 | `pm-voice`       | `pm-voice-test`          | One full voice renders a note end-to-end and releases |
 | `pm-modroute`    | `pm-modroute-test`       | Modulation routing at the voice level: connecting a mod source switches the destination's path |
 | `pm-voicemanager`| `pm-voicemanager-test`   | Polyphony: a 3-note chord allocates 3 voices and frees them on release |
-| `ss-bend`        | `ss-bend-test`           | MIDI 2.0 per-note decode; channel and per-note pitch bend (pitch measured on a single-mode bank); note matching on note + channel + group; pedal / all-notes-off / panic release notes on any channel |
-| `ss-clap`        | `ss-clap-host-test`      | The built `.clap` over the CLAP C API: note-port dialects, params + state, 7.9-pitch notes, per-note and channel bend reach the resonator |
+| `ss-bend`        | `ss-bend-test`           | MIDI 2.0 per-note decode; channel and per-note pitch bend (pitch measured on a single-mode bank); note matching on note + channel + group; per-note bend range (RC 7); Pitch 7.25; CLAP note ids; CLAP note expression conversion; pedal / all-notes-off / panic release notes on any channel |
+| `ss-clap`        | `ss-clap-host-test`      | The built `.clap` over the CLAP C API: note-port dialects, params + state, 7.9-pitch notes, per-note and channel bend, RC 7, CLAP tuning expressions (with key, and by note id alone) reach the resonator; pitch is measured to a fraction of a sample |
 
 ## Running a single test
 

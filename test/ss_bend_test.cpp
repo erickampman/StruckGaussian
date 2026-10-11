@@ -9,6 +9,7 @@
 // released" is checked through activeCount() after a short ring-out, not by listening for silence.
 
 #include "VoiceManager.hpp"
+#include "clap_ump.h"
 #include "pm_addresses.h"
 #include "pm_midi.h"
 #include "pm_params.h"
@@ -323,6 +324,98 @@ void testPerNoteBendRange() {
    check(near(afterReset, semitonesUp(c4, 6.0)), "the RC 7 range survives a reset (" + hz(afterReset) + ")");
 }
 
+// Registered per-note controller #3, Pitch 7.25, for `semitones` (absolute, as a note number).
+pm::UmpMessage pitch725(uint8_t note, double semitones, uint8_t channel = 0) {
+   return makeUmp(pm::kStatusRegPerNoteController, channel, note, pm::kRegPerNotePitch7_25,
+                  uint32_t(std::llround(semitones * 33554432.0)));
+}
+
+void testPitch725() {
+   std::printf("Pitch 7.25 (registered per-note controller #3):\n");
+   const double c4 = pm::noteToFrequency(60);
+
+   VoiceManager vm(kSampleRate, kBlock);
+   configure(vm);
+   vm.handleMIDIMessage(noteOn(60));
+   vm.handleMIDIMessage(pitch725(60, 67.25));
+   const double g4 = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+   check(near(g4, semitonesUp(c4, 7.25)), "C4 retuned to 67.25 sounds there (" + hz(g4) + ")");
+   vm.handleMIDIMessage(perNoteBend(60, 1.0, 0, 2.0));
+   render(vm, 4096);
+   const double bentG = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+   check(near(bentG, semitonesUp(c4, 8.25)), "a per-note bend offsets from the Pitch 7.25 pitch (" + hz(bentG) + ")");
+
+   // Lasts for the sounding note only: the next note-on on that key starts at its own pitch.
+   VoiceManager next(kSampleRate, kBlock);
+   configure(next);
+   setVM(next, MIDIParamItemVoiceCount, 1.0f);
+   next.handleMIDIMessage(noteOn(60));
+   next.handleMIDIMessage(pitch725(60, 72.0));
+   render(next, 4096);
+   next.handleMIDIMessage(noteOff(60));
+   next.handleMIDIMessage(noteOn(60));
+   const double fresh = estimateFrequency(render(next, uint32_t(kSampleRate)));
+   check(near(fresh, c4), "the next note-on starts untuned (" + hz(fresh) + ")");
+
+   // Relative to a Pitch 7.9 note-on, Pitch 7.25 still lands on the absolute pitch it names.
+   VoiceManager micro(kSampleRate, kBlock);
+   configure(micro);
+   micro.handleMIDIMessage(makeUmp(pm::kStatusNoteOn, 0, 60, pm::kAttrPitch7_9, (0xC000u << 16) | (60u << 9 | 256u)));
+   micro.handleMIDIMessage(pitch725(60, 64.0));
+   const double e4 = estimateFrequency(render(micro, uint32_t(kSampleRate)));
+   check(near(e4, semitonesUp(c4, 4.0)), "on a 7.9 note (60.5), Pitch 7.25 = 64 sounds E4 (" + hz(e4) + ")");
+}
+
+// CLAP note ids: when both messages carry one, the id decides which note is meant.
+void testNoteIds() {
+   std::printf("CLAP note ids:\n");
+   const double c4 = pm::noteToFrequency(60);
+   auto withId = [](pm::UmpMessage m, int32_t id) { m.noteId = id; return m; };
+
+   VoiceManager vm(kSampleRate, kBlock);
+   configure(vm);
+   vm.handleMIDIMessage(withId(noteOn(60), 1));
+   vm.handleMIDIMessage(withId(noteOn(60), 2));          // the same key, struck again as a new note
+   check(vm.activeCount() == 2, "the same key with two ids takes two voices (got " + num(vm.activeCount()) + ")");
+   check(vm.keyForNoteId(2) == 60 && vm.keyForNoteId(9) == -1, "keyForNoteId finds a sounding id, and only that");
+   vm.handleMIDIMessage(withId(pitch725(60, 72.0), 2));
+   const std::vector<float> pair = render(vm, uint32_t(kSampleRate));
+   const double c5 = pm::noteToFrequency(72);
+   check(toneLevel(pair, c4) > 0.01 && toneLevel(pair, c5) > 0.01,
+         "an expression for id 2 moves only id 2 (C4 " + num(toneLevel(pair, c4)) + ", C5 " + num(toneLevel(pair, c5)) + ")");
+   setBank(vm, ModalBankParamItemDecayT60, 0.05f);
+   vm.handleMIDIMessage(withId(noteOff(60), 1));
+   render(vm, uint32_t(kSampleRate));
+   check(vm.activeCount() == 1 && vm.keyForNoteId(2) == 60, "a note-off for id 1 releases only id 1");
+}
+
+void testClapNoteExpressionConversion() {
+   std::printf("CLAP note expression conversion:\n");
+   auto expr = [](clap_note_expression id, int32_t noteId, int16_t key, double value) {
+      clap_event_note_expression_t e{};
+      e.header.size = sizeof(e);
+      e.header.type = CLAP_EVENT_NOTE_EXPRESSION;
+      e.expression_id = id; e.note_id = noteId; e.port_index = 0; e.channel = 0; e.key = key; e.value = value;
+      return e;
+   };
+   const auto tuning = pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_TUNING, 5, 60, 7.5), 60);
+   check(tuning && tuning->status == pm::kStatusRegPerNoteController && tuning->ccIndex == pm::kRegPerNotePitch7_25
+             && tuning->ccData == uint32_t(67.5 * 33554432.0) && tuning->noteId == 5,
+         "tuning +7.5 on key 60 becomes Pitch 7.25 = 67.5, keeping the note id");
+   const auto big = pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_TUNING, 5, 60, 100.0), 60);
+   check(big && big->ccData == 0xFFFFFFFFu, "tuning past the top of Pitch 7.25's range clamps to it");
+   check(!pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_TUNING, 5, -1, 2.0), -1),
+         "id-only tuning with no known key is dropped");
+   const auto pressure = pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_PRESSURE, 5, -1, 1.0), -1);
+   check(pressure && pressure->status == pm::kStatusPolyPressure && pressure->data32 == 0xFFFFFFFFu,
+         "pressure becomes poly pressure, and routes by id alone");
+   const auto bright = pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_BRIGHTNESS, -1, 64, 0.5), 64);
+   check(bright && bright->status == pm::kStatusRegPerNoteController && bright->ccIndex == pm::kRegPerNoteBrightness,
+         "brightness becomes registered per-note controller #74");
+   check(!pm::fromClapNoteExpression(expr(CLAP_NOTE_EXPRESSION_VOLUME, 5, 60, 1.0), 60),
+         "volume has no destination");
+}
+
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
 void testGeneratedNoteOffsMatchChannel() {
@@ -369,6 +462,9 @@ int main() {
    testChannelBend();
    testPerNoteBend();
    testPerNoteBendRange();
+   testPitch725();
+   testNoteIds();
+   testClapNoteExpressionConversion();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

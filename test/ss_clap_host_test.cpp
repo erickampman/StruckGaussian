@@ -67,7 +67,9 @@ struct EventList {
 // Normalized autocorrelation over the sustained part of the decay. A modal bank is periodic once its
 // harmonic modes are ringing, and autocorrelation is far more forgiving of the excitation transient
 // and of the mode amplitudes than zero crossings are. The first lag whose correlation is within 5%
-// of the best is the fundamental period (its multiples are also peaks, at larger lags).
+// of the best is the fundamental period (its multiples are also peaks, at larger lags). The peak is
+// then refined by parabolic interpolation: a whole-sample lag alone resolves C4 only to ~0.5%
+// (48000/182 = 263.7 Hz), too coarse to check an interval.
 double estimatePitch(const std::vector<float>& samples, double minHz, double maxHz) {
     const size_t start = samples.size() * 2 / 5;      // skip the strike transient
     const size_t count = samples.size() - start;
@@ -91,8 +93,17 @@ double estimatePitch(const std::vector<float>& samples, double minHz, double max
         best = std::max(best, correlation[lag]);
     }
     if (best <= 0.0) return 0.0;
-    for (size_t lag = minLag; lag <= maxLag; ++lag)
-        if (correlation[lag] >= 0.95 * best) return kSampleRate / double(lag);
+    for (size_t lag = minLag; lag <= maxLag; ++lag) {
+        if (correlation[lag] < 0.95 * best) continue;
+        while (lag < maxLag && correlation[lag + 1] > correlation[lag]) ++lag;   // to the local peak
+        double period = double(lag);
+        if (lag > minLag && lag < maxLag) {
+            const double l = correlation[lag - 1], c = correlation[lag], r = correlation[lag + 1];
+            const double denominator = l - 2.0 * c + r;
+            if (denominator < 0.0) period += 0.5 * (l - r) / denominator;
+        }
+        return kSampleRate / period;
+    }
     return 0.0;
 }
 
@@ -324,6 +335,22 @@ clap_event_note_t makeClapNoteOn(int16_t key, double velocity) {
     event.key = key;
     event.channel = 0;
     event.velocity = velocity;
+    return event;
+}
+
+clap_event_note_expression_t makeNoteExpression(clap_note_expression id, int32_t noteId, int16_t key,
+                                                 double value) {
+    clap_event_note_expression_t event{};
+    event.header.size = sizeof(event);
+    event.header.time = 0;
+    event.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    event.header.type = CLAP_EVENT_NOTE_EXPRESSION;
+    event.expression_id = id;
+    event.note_id = noteId;
+    event.port_index = 0;
+    event.channel = 0;
+    event.key = key;
+    event.value = value;
     return event;
 }
 
@@ -602,8 +629,7 @@ int main(int argc, char** argv) {
         const clap_event_header_t* events[] = { &noteOn.header, &bend.header };
         const double expected = kC4Hz * std::pow(2.0, 1.0 / 12.0);
         const double hz = pitchOfEvents(lib, events, 2, expected, "per-note bend, default range");
-        // Against the measured unbent C4, as for the 7.9 check: the patch's absolute pitch reads a
-        // little sharp (64 modes, clipped), but a bend must move it by the exact interval.
+        // Against the measured unbent C4, as for the 7.9 check: an interval is what a bend controls.
         check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
               "with no RC 7, a half-way per-note bend moves C4 up 1 semitone (±2)");
     }
@@ -631,6 +657,32 @@ int main(int argc, char** argv) {
         const double hz = pitchOfEvents(lib, events, 2, expected, "MIDI 1.0 channel bend +1");
         check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
               "a MIDI 1.0 channel bend of +1 semitone moves C4 to C#4");
+    }
+
+    // --- CLAP note expressions + note ids, as Bitwig sends them ---------------------------------------
+    // Tuning arrives as Pitch 7.25 (an absolute pitch), so it is exact far beyond the ±2 bend range.
+    std::printf("CLAP note expressions (Bitwig):\n");
+    {
+        clap_event_note_t noteOn = makeClapNoteOn(int16_t(kNote), 1.0);
+        noteOn.note_id = 7;
+        const clap_event_note_expression_t tuning =
+            makeNoteExpression(CLAP_NOTE_EXPRESSION_TUNING, 7, int16_t(kNote), 24.0);
+        const clap_event_header_t* events[] = { &noteOn.header, &tuning.header };
+        const double expected = kC4Hz * 4.0;
+        const double hz = pitchOfEvents(lib, events, 2, expected, "tuning +24 (key + id)");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - 4.0) < 0.002 * 4.0,
+              "a +24 semitone tuning expression sounds two octaves up");
+    }
+    {
+        clap_event_note_t noteOn = makeClapNoteOn(int16_t(kNote), 1.0);
+        noteOn.note_id = 11;
+        const clap_event_note_expression_t tuning =
+            makeNoteExpression(CLAP_NOTE_EXPRESSION_TUNING, 11, -1, 7.0);   // id only, no key
+        const clap_event_header_t* events[] = { &noteOn.header, &tuning.header };
+        const double expected = kC4Hz * std::pow(2.0, 7.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 2, expected, "tuning +7 (id only)");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 7.0 / 12.0)) < 0.002,
+              "an expression naming only the note id reaches that note (+7 semitones)");
     }
 
     // --- the MIDI-1.0 / CLAP dialects still work -------------------------------------------------

@@ -221,6 +221,7 @@ target_link_libraries(pm-voicemanager-test PRIVATE pm_framework)
 
 add_executable(ss-bend-test test/ss_bend_test.cpp)
 target_link_libraries(ss-bend-test PRIVATE pm_framework)
+target_include_directories(ss-bend-test PRIVATE external/clap/include)   # clap_ump.h
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     # pm-selftest only pulls in light headers → fully strict (optionally -Werror in CI).
