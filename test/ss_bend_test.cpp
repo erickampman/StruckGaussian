@@ -416,6 +416,40 @@ void testClapNoteExpressionConversion() {
          "volume has no destination");
 }
 
+// holdsNote: what the plugin's CLAP_EVENT_NOTE_END reporting relies on.
+void testHoldsNote() {
+   std::printf("Note lifetime (holdsNote, for CLAP note end):\n");
+   VoiceManager ring(kSampleRate, kBlock);
+   configure(ring);
+   setBank(ring, ModalBankParamItemDecayT60, 0.3f);
+   ring.handleMIDIMessage(noteOn(60));
+   ring.handleMIDIMessage(noteOff(60));
+   render(ring, 2048);
+   check(ring.holdsNote(noteOn(60)), "a released note is still held while it rings");
+   render(ring, uint32_t(2.0 * kSampleRate));
+   check(!ring.holdsNote(noteOn(60)), "...and not once it has rung down");
+
+   VoiceManager mono(kSampleRate, kBlock);
+   configure(mono, true);
+   mono.handleMIDIMessage(noteOn(60));
+   mono.handleMIDIMessage(noteOn(64));
+   render(mono, 2048);
+   check(mono.holdsNote(noteOn(60)) && mono.holdsNote(noteOn(64)),
+         "mono: a held-but-silent note in the stack is still held (it can come back)");
+   mono.handleMIDIMessage(noteOff(60));
+   check(!mono.holdsNote(noteOn(60)) && mono.holdsNote(noteOn(64)), "mono: releasing it from the stack ends it");
+
+   VoiceManager steal(kSampleRate, kBlock);
+   configure(steal);
+   setVM(steal, MIDIParamItemVoiceCount, 1.0f);           // poly with one voice: the next note steals
+   steal.handleMIDIMessage(noteOn(60));
+   render(steal, 2048);
+   steal.handleMIDIMessage(noteOn(67));
+   check(steal.holdsNote(noteOn(67)), "a stealing note is held from its note-on");
+   render(steal, 4096);
+   check(!steal.holdsNote(noteOn(60)) && steal.holdsNote(noteOn(67)), "the stolen note ends once the steal completes");
+}
+
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
 void testGeneratedNoteOffsMatchChannel() {
@@ -465,6 +499,7 @@ int main() {
    testPitch725();
    testNoteIds();
    testClapNoteExpressionConversion();
+   testHoldsNote();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

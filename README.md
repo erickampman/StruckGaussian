@@ -72,7 +72,14 @@ converted to MIDI 2.0 per-note messages:
   in StruckSynth responds to either yet; they are routed so a future modulation source can.
 - Volume, Pan, Vibrato and Expression are ignored.
 
-An expression may name only a note id: tuning then looks up that note's key. VST3 note expression
+An expression may name only a note id: tuning then looks up that note's key.
+
+**Note end and voice info.** A struck note rings on after note-off, so the plugin reports
+`CLAP_EVENT_NOTE_END` for a CLAP note when the engine actually stops playing it: when the voice rings
+down to silence, is stolen, or (mono) the note leaves the held stack. Hosts such as Bitwig keep a
+note's per-voice modulation and expressions running until then. Notes that arrive as MIDI events get
+no note end, since a CLAP note end answers a CLAP note-on. The voice-info extension reports the voice
+count (10, or 1 in Mono) and that notes may overlap on the same key, since note ids keep them apart. VST3 note expression
 (PlainOldSynth's clap-wrapper extension) does not apply: StruckSynth has no VST3 build.
 
 The [DISTRHO Plugin Framework (DPF)](https://github.com/DISTRHO/DPF) is used **only as the GUI
