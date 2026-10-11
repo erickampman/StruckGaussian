@@ -39,6 +39,10 @@ enum ParamIndex {
    kParamBrightness,        // amplitude tilt across modes
    // --- Appended (CLAP ids are indexes, so new params go last) ---
    kParamMpe,               // MPE input, lower zone: member bend ±48 + the master channel's bend
+   // --- Expression (appended): what pressure and timbre (CC74) do; all 0 = no effect ---
+   kParamPressToDecay,      // pressure → decay time, octaves of T60 at full pressure (+ rings longer)
+   kParamTimbreToTilt,      // timbre → damping tilt, added to Damp at full timbre (+ darker tail)
+   kParamTimbreToPos,       // timbre → strike position, added at full timbre (read at the strike)
    kParamCount
 };
 
@@ -81,6 +85,10 @@ static constexpr ParamSpec kParams[kParamCount] = {
    {"Brightness", "bright",   "",    -1.0f,  1.0f,   0.0f,  false, false},
    // Appended
    {"MPE",        "mpe",      "",    0.0f,   1.0f,   0.0f,  false, true },
+   // Expression
+   {"Press>Decay", "prsDecay", "oct", -4.0f, 4.0f,   0.0f,  false, false},
+   {"Tmb>Tilt",   "tmbTilt",  "",    -3.0f,  3.0f,   0.0f,  false, false},
+   {"Tmb>Pos",    "tmbPos",   "",    -1.0f,  1.0f,   0.0f,  false, false},
 };
 
 // Material picker labels (order matches ModalBankMaterial in pm_params.h). Null-terminated so the
@@ -115,7 +123,8 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
               && symbolIs(kParamDampTilt, "dampTilt") && symbolIs(kParamDampBellAmount, "bellAmt")
               && symbolIs(kParamDampBellCentre, "bellCtr") && symbolIs(kParamDampBellWidth, "bellWid")
               && symbolIs(kParamStrikePosition, "strkPos") && symbolIs(kParamBrightness, "bright")
-              && symbolIs(kParamMpe, "mpe"),
+              && symbolIs(kParamMpe, "mpe") && symbolIs(kParamPressToDecay, "prsDecay")
+              && symbolIs(kParamTimbreToTilt, "tmbTilt") && symbolIs(kParamTimbreToPos, "tmbPos"),
               "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------

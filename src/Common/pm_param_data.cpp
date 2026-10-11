@@ -203,6 +203,28 @@ const ModuleParamConstantsGroup pitchConverterModuleConstantsGroup = {
    const_cast<char*>("pitchConverter"),
    sizeof(pitchConverterConstants) / sizeof(pitchConverterConstants[0]), pitchConverterConstants};
 
+// Channel pressure — pressure (channel, poly, CLAP Pressure) → a held 0..1 value per voice.
+static const ModuleParamConstants channelPressureConstants[] = {
+   {"dummy", ChannelPressureParamItemDummy, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0},
+   {"mpe",   ChannelPressureParamItemMPE,   0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+};
+const ModuleParamConstantsGroup channelPressureConstantsGroup = {
+   const_cast<char*>("Channel Pressure"),
+   sizeof(channelPressureConstants) / sizeof(channelPressureConstants[0]), channelPressureConstants};
+
+// CC converter — a chosen controller number → a held value; Per Note mode makes CC74 the Timbre source.
+static const ModuleParamConstants ccConverterConstants[] = {
+   {"ccNumber",    CCParamItemNumber,    0, 0, nullptr, 0.0f, 127.0f, 1.0f, 0},
+   {"ccIsBoolean", CCParamItemIsBoolean, 0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"input",       CCParamItemInput,     0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"ccAmount",    CCParamItemAmount,    0, 0, nullptr, 0.0f, 1.0f, 1.0f, 0},
+   {"ccOffset",    CCParamItemOffset,    0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"ccPerNote",   CCParamItemPerNote,   0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"ccMpe",       CCParamItemMPE,       0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+};
+const ModuleParamConstantsGroup ccConverterConstantsGroup = {
+   const_cast<char*>("CC Converter"), sizeof(ccConverterConstants) / sizeof(ccConverterConstants[0]), ccConverterConstants};
+
 // Pitch bend converter — MIDI 2.0 pitch bend → a bipolar octaves signal. Bend range in quarter-tones
 // (±2 semitones by default), used by per-note bend too until registered controller 7 sets its own.
 static const ModuleParamConstants pitchBendConverterConstants[] = {
@@ -257,6 +279,8 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"level",          ModalBankParamItemLevel,          0, 0, nullptr, 0.0f, 2.0f, 0.5f, 0},
    {"pitchMod2Input", ModalBankParamItemPitchMod2Input, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection (pitch bend)
    {"pitchMod2Level", ModalBankParamItemPitchMod2Level, 0, 0, nullptr, -5.0f, 5.0f, 1.0f, 0},
+   {"dampTiltModInput", ModalBankParamItemDampTiltModInput, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
+   {"dampTiltModLevel", ModalBankParamItemDampTiltModLevel, 0, 0, nullptr, -3.0f, 3.0f, 0.0f, 0},
 };
 const ModuleParamConstantsGroup modalBankConstantsGroup = {
    const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};

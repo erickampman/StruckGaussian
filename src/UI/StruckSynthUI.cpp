@@ -54,6 +54,7 @@ static inline Color colStrike() { return Color(214, 168, 92);  }
 static inline Color colObject() { return Color(120, 190, 140); }
 static inline Color colDecay()  { return Color(168, 140, 214); }
 static inline Color colOutput() { return Color(214, 132, 96);  }
+static inline Color colExpression() { return Color(96, 186, 196); }
 
 // --------------------------------------------------------------------------------------------
 // ModalSpectrum — draws the current bank as vertical bars: x = mode frequency (log), height =
@@ -213,6 +214,7 @@ public:
         fObjectGroup = makeGroup("Object", colObject());
         fDecayGroup  = makeGroup("Decay",  colDecay());
         fOutputGroup = makeGroup("Timbre", colOutput());
+        fExpressionGroup = makeGroup("Expression", colExpression());
 
         // Build each param control into its panel, in panel order.
         for (uint32_t i = 0; i < kParamCount; ++i)
@@ -405,34 +407,45 @@ private:
         fPresetDropdown->setSize(static_cast<uint>(presetW), static_cast<uint>(presetH));
         fPresetDropdown->setAbsolutePos(W - M - presetW, static_cast<int>(4 * s));
 
-        // 3 rows under the header, two panels per row. Within a row the width is split by the cells
-        // each panel needs (its control count), so controls get similar widths everywhere instead of a
-        // 2-control panel taking half the window. Top: spectrum | Strike. Middle: Object | Decay.
-        // Bottom: Global | Timbre.
+        // 3 rows under the header. Within a row the width is split by the cells each panel needs (its
+        // control count), so controls get similar widths everywhere instead of a 2-control panel taking
+        // half the window. Top: spectrum | Strike. Middle: Object | Decay. Bottom: Global | Timbre |
+        // Expression.
         const int gridY = hdr;
         const int gridH = H - gridY - M;
         const int rowH  = (gridH - 2 * gap) / 3;
-        const int rowW  = W - 2 * M - gap;   // both panels of a row, without the gap between them
         const int row0  = gridY, row1 = gridY + rowH + gap, row2 = gridY + 2 * (rowH + gap);
 
         auto cells = [](const GroupBox* g) { return std::max(1, g->controlCount()); };
-        // Lay out one row: `left` gets leftCells / (leftCells + rightCells) of the width.
-        auto placeRow = [&](SubWidget* left, int leftCells, SubWidget* right, int rightCells, int y) {
-            const int leftW = rowW * leftCells / (leftCells + rightCells);
-            left->setAbsolutePos(M, y);
-            left->setSize(static_cast<uint>(leftW), static_cast<uint>(rowH));
-            right->setAbsolutePos(M + leftW + gap, y);
-            right->setSize(static_cast<uint>(rowW - leftW), static_cast<uint>(rowH));
+        struct Slot { SubWidget* widget; int cells; };
+        // Lay out one row left to right, each widget's width in proportion to its cells.
+        auto placeRow = [&](std::initializer_list<Slot> slots, int y) {
+            const int n = static_cast<int>(slots.size());
+            const int rowW = W - 2 * M - (n - 1) * gap;   // the panels, without the gaps between them
+            int total = 0;
+            for (const Slot& slot : slots) total += slot.cells;
+            int x = M, used = 0, done = 0;
+            for (const Slot& slot : slots) {
+                used += slot.cells;
+                const int right = rowW * used / total;   // cumulative, so rounding never drifts
+                slot.widget->setAbsolutePos(x, y);
+                slot.widget->setSize(static_cast<uint>(right - done), static_cast<uint>(rowH));
+                x += (right - done) + gap;
+                done = right;
+            }
         };
-        GroupBox* panels[5] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
-                                fDecayGroup.get(), fOutputGroup.get() };
+        GroupBox* panels[6] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
+                                fDecayGroup.get(), fOutputGroup.get(), fExpressionGroup.get() };
         for (GroupBox* g : panels) g->setUiScale(s);
 
         // The spectrum holds no controls; it reads fine at about three control cells wide.
         constexpr int kSpectrumCells = 3;
-        placeRow(fSpectrum.get(),    kSpectrumCells,           fStrikeGroup.get(), cells(fStrikeGroup.get()), row0);
-        placeRow(fObjectGroup.get(), cells(fObjectGroup.get()), fDecayGroup.get(), cells(fDecayGroup.get()),  row1);
-        placeRow(fGlobalGroup.get(), cells(fGlobalGroup.get()), fOutputGroup.get(), cells(fOutputGroup.get()), row2);
+        placeRow({ { fSpectrum.get(), kSpectrumCells }, { fStrikeGroup.get(), cells(fStrikeGroup.get()) } }, row0);
+        placeRow({ { fObjectGroup.get(), cells(fObjectGroup.get()) },
+                   { fDecayGroup.get(),  cells(fDecayGroup.get()) } }, row1);
+        placeRow({ { fGlobalGroup.get(), cells(fGlobalGroup.get()) },
+                   { fOutputGroup.get(), cells(fOutputGroup.get()) },
+                   { fExpressionGroup.get(), cells(fExpressionGroup.get()) } }, row2);
 
         // Knob diameter bounded by the row height (room for label + value) and, via relayout, the
         // cell width. Dropdowns are sized to their cell by relayout(); we only set their scale.
@@ -467,6 +480,8 @@ private:
         case kParamDecayT60: case kParamDampTilt: case kParamDampBellAmount:
         case kParamDampBellCentre: case kParamDampBellWidth:
             return fDecayGroup.get();
+        case kParamPressToDecay: case kParamTimbreToTilt: case kParamTimbreToPos:
+            return fExpressionGroup.get();
         default:
             return fOutputGroup.get(); // strikePos, brightness, mix
         }
@@ -486,6 +501,8 @@ private:
         case kParamDecayT60: case kParamDampTilt: case kParamDampBellAmount:
         case kParamDampBellCentre: case kParamDampBellWidth:
             return colDecay();
+        case kParamPressToDecay: case kParamTimbreToTilt: case kParamTimbreToPos:
+            return colExpression();
         default:
             return colOutput();
         }
@@ -537,7 +554,8 @@ private:
     }
 
     std::unique_ptr<ModalSpectrum> fSpectrum;
-    std::unique_ptr<GroupBox>      fGlobalGroup, fStrikeGroup, fObjectGroup, fDecayGroup, fOutputGroup;
+    std::unique_ptr<GroupBox>      fGlobalGroup, fStrikeGroup, fObjectGroup, fDecayGroup, fOutputGroup,
+                                   fExpressionGroup;
     std::unique_ptr<Knob>          fKnobs[kParamCount];
     std::unique_ptr<Dropdown>      fDropdowns[kParamCount];
     std::unique_ptr<PopupMenu>     fMenu;

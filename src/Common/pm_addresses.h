@@ -143,6 +143,20 @@ inline constexpr AUParameterAddress modalBank1PitchInputAddress =
 inline constexpr AUParameterAddress modalBank1PitchMod2InputAddress =
    MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemPitchMod2Input);
 
+// ModalBank modulation inputs used by the Expression knobs.
+inline constexpr AUParameterAddress modalBank1DecayModInputAddress =
+   MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayModInput);
+inline constexpr AUParameterAddress modalBank1DampTiltModInputAddress =
+   MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTiltModInput);
+inline constexpr AUParameterAddress modalBank1StrikeModInputAddress =
+   MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikeInput);
+
+// --- Pressure and Timbre sources (per voice) -----------------------------------------------
+inline constexpr AUParameterAddress channelPressure1Address =
+   MODULE_PARAM_ADDRESS(ModuleParamKindChannelPressure, ModuleInstance1, 0);
+inline constexpr AUParameterAddress timbre1Address =   // a CCConverter on CC74, Per Note
+   MODULE_PARAM_ADDRESS(ModuleParamKindControlChangeConverter, ModuleInstance1, 0);
+
 // --- Pitch bend converter (channel bend + MIDI 2.0 per-note bend → octaves) ---------------
 inline constexpr AUParameterAddress pitchBend1Address =
    MODULE_PARAM_ADDRESS(ModuleParamKindPitchBendConverter, ModuleInstance1, 0);

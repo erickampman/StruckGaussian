@@ -226,8 +226,10 @@ AUParameterAddress vmAddress(uint32_t paramIndex) {
     // ModalBank: timbre
     case kParamStrikePosition: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikePosition);
     case kParamBrightness:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemBrightness);
-    // MIDI input
-    case kParamMpe:            return MODULE_PARAM_ADDRESS(ModuleParamKindPitchBendConverter, ModuleInstance1, PitchBendConverterParamItemMPE);
+    // Expression: the bank's mod levels for the Pressure / Timbre inputs (VoiceManager::buildDefaultPatch)
+    case kParamPressToDecay:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayModLevel);
+    case kParamTimbreToTilt:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTiltModLevel);
+    case kParamTimbreToPos:    return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikeModLevel);
     default:                   return 0;
     }
 }
@@ -237,6 +239,13 @@ void applyParam(Plugin* plugin, uint32_t index, float value) {
     if (!plugin->voiceManager) return;
     if (index == uint32_t(kParamGlide))     { applySlew(plugin);      return; }
     if (index == uint32_t(kParamVoiceMode)) { applyVoiceMode(plugin); return; }
+    if (index == uint32_t(kParamMpe)) {      // every per-voice module that reads the MPE zone
+        for (const AUParameterAddress a : { MODULE_PARAM_FROM_BASE_AND_ITEM(pitchBend1Address, PitchBendConverterParamItemMPE),
+                                            MODULE_PARAM_FROM_BASE_AND_ITEM(channelPressure1Address, ChannelPressureParamItemMPE),
+                                            MODULE_PARAM_FROM_BASE_AND_ITEM(timbre1Address, CCParamItemMPE) })
+            setEngine(plugin, a, value);
+        return;
+    }
     const AUParameterAddress a = vmAddress(index);
     if (a != 0) setEngine(plugin, a, value);
 }

@@ -759,6 +759,43 @@ int main(int argc, char** argv) {
         check(a > 0.001f && a == b, "MIDI 1.0 velocity 127 strikes exactly as a CLAP note at velocity 1.0");
     }
 
+    // --- Expression: the three knobs exist, default to 0, and CLAP Pressure reaches Press>Decay ------
+    std::printf("Expression:\n");
+    {
+        Instance probe;
+        if (probe.create(lib)) {
+            const auto* params = static_cast<const clap_plugin_params_t*>(
+                probe.plugin->get_extension(probe.plugin, CLAP_EXT_PARAMS));
+            bool allZero = params != nullptr;
+            for (const uint32_t index : { uint32_t(kParamPressToDecay), uint32_t(kParamTimbreToTilt), uint32_t(kParamTimbreToPos) }) {
+                clap_param_info_t info{};
+                allZero = allZero && params->get_info(probe.plugin, index, &info) && info.default_value == 0.0;
+            }
+            check(allZero, "Press>Decay, Tmb>Tilt and Tmb>Pos exist and default to 0 (no effect)");
+            probe.destroy();
+        }
+        // The tail's level a second after the strike, with full CLAP pressure on the note.
+        auto tailLevel = [&](double pressToDecay) {
+            Instance inst;
+            if (!inst.create(lib)) return 0.0f;
+            installTestPatch(inst.plugin);
+            sendParam(inst.plugin, kParamDecayT60, 0.3);
+            sendParam(inst.plugin, kParamPressToDecay, pressToDecay);
+            clap_event_note_t noteOn = makeClapNoteOn(int16_t(kNote), 1.0);
+            noteOn.note_id = 5;
+            const clap_event_note_expression_t pressure =
+                makeNoteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 5, int16_t(kNote), 1.0);
+            const clap_event_header_t* events[] = { &noteOn.header, &pressure.header };
+            render(inst.plugin, uint32_t(kSampleRate), events, 2);
+            const float level = peakOf(render(inst.plugin, 4800, nullptr, 0));
+            inst.destroy();
+            return level;
+        };
+        const float off = tailLevel(0.0), on = tailLevel(3.0);
+        std::printf("        tail peak after 1 s: Press>Decay 0 %.6f | +3 oct %.6f\n", double(off), double(on));
+        check(on > 100.0f * off, "a CLAP Pressure expression with Press>Decay +3 keeps the note ringing");
+    }
+
     // --- note end + voice-info ---------------------------------------------------------------------
     // A struck note rings on after note-off; CLAP_EVENT_NOTE_END must come when it falls silent, not
     // at the note-off, and only for notes that arrived as CLAP note events.

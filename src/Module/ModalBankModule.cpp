@@ -3,6 +3,7 @@
 //
 
 #include "ModalBankModule.hpp"
+#include <cmath>
 #include "ModalBank.hpp"          // the framework-free core
 #include "ModalGenerators.hpp"    // procedural mode series
 #include "PitchConverter.hpp"
@@ -133,15 +134,22 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
                    0, kModalStretchCount - 1)]);
 
     // --- decay, with optional modulation -----------------------------------
+    // Decay modulation is in octaves of T60 (+1 doubles it, -1 halves it), so one amount feels the
+    // same on a short wood block and a long bell. Both these inputs act on a ringing note: they
+    // change each mode's decay coefficient, not just the next strike.
     const float decayMod = readControl(module, ModalBankParamItemDecayModInput, processCallID, count)
                          * module->getParamValue(ModalBankParamItemDecayModLevel);
-    bank.setDecayT60(module->getParamValue(ModalBankParamItemDecayT60) + decayMod);
-    bank.setDampTilt(module->getParamValue(ModalBankParamItemDampTilt));
+    bank.setDecayT60(module->getParamValue(ModalBankParamItemDecayT60) * std::exp2(decayMod));
+    const float tiltMod = readControl(module, ModalBankParamItemDampTiltModInput, processCallID, count)
+                        * module->getParamValue(ModalBankParamItemDampTiltModLevel);
+    bank.setDampTilt(module->getParamValue(ModalBankParamItemDampTilt) + tiltMod);
     bank.setDampBellAmount(module->getParamValue(ModalBankParamItemDampBellAmount));
     bank.setDampBellCentre(module->getParamValue(ModalBankParamItemDampBellCentre));
     bank.setDampBellWidth(module->getParamValue(ModalBankParamItemDampBellWidth));
 
     // --- strike, with optional modulation ----------------------------------
+    // Strike position only shapes how a strike excites the modes (it is an input gain), so moving it
+    // matters at the strike, not on a note already ringing.
     const float strikeMod = readControl(module, ModalBankParamItemStrikeInput, processCallID, count)
                           * module->getParamValue(ModalBankParamItemStrikeModLevel);
     bank.setStrikePosition(module->getParamValue(ModalBankParamItemStrikePosition) + strikeMod);

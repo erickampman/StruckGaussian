@@ -39,6 +39,11 @@ void VoiceManager::initializeVoices(PitchConverter *pitchConverter)
 		voice->initializeModules(moduleFactory.get(), pitchConverter);
 		buildDefaultPatch(*voice);
 	}
+
+    // The CC converter is the Timbre source: CC74, tracked per channel, with MIDI 2.0 per-note
+    // controller #74 (and CLAP Brightness) per note. Fixed, so it is part of the patch, not a param.
+    setParameter(MODULE_PARAM_FROM_BASE_AND_ITEM(timbre1Address, CCParamItemNumber), float(pm::kRegPerNoteBrightness));
+    setParameter(MODULE_PARAM_FROM_BASE_AND_ITEM(timbre1Address, CCParamItemPerNote), 1.0f);
 }
 
 void VoiceManager::reset() {
@@ -67,6 +72,8 @@ void VoiceManager::buildDefaultPatch(Voice& voice)
     Module* modalBankModule      = voice.getModule(modalBank1Address);
     Module* finalModule          = voice.getModule(finalAddress);
     Module* pitchBendModule      = voice.getModule(pitchBend1Address);
+    Module* pressureModule       = voice.getModule(channelPressure1Address);
+    Module* timbreModule         = voice.getModule(timbre1Address);
 
     //                       upstream            -> downstream      (downstream input port)
     ++(finalModule->activeCount);
@@ -80,6 +87,12 @@ void VoiceManager::buildDefaultPatch(Voice& voice)
     // Pitch bend (channel + MIDI 2.0 per-note) into the bank's SECOND pitch input, after the glide
     // rather than through it: a bend must track the controller, not the portamento time.
     voice.connectModules(pitchBendModule,      modalBankModule, modalBank1PitchMod2InputAddress);
+    // Expression: Pressure -> decay (acts on a ringing note); Timbre (CC74) -> damping tilt (acts on a
+    // ringing note) and strike position (acts at the strike). The plugin's Expression knobs are the
+    // bank's mod levels, all 0 by default, so these connections are silent until a knob moves.
+    voice.connectModules(pressureModule,       modalBankModule, modalBank1DecayModInputAddress);
+    voice.connectModules(timbreModule,         modalBankModule, modalBank1DampTiltModInputAddress);
+    voice.connectModules(timbreModule,         modalBankModule, modalBank1StrikeModInputAddress);
 #else
     // do nothing
 #endif

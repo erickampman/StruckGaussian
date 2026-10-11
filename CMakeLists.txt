@@ -26,6 +26,8 @@ add_library(pm_framework STATIC
     src/Module/CVMixerModule.cpp
     src/Module/ADSRHelper.cpp
     src/Module/ADSRModule.cpp
+    src/Module/CCConverterModule.cpp
+    src/Module/ChannelPressureModule.cpp
     src/Module/CombineModule.cpp
     src/Module/FinalModule.cpp
     src/Module/SlewModule.cpp

@@ -22,6 +22,8 @@ extern const ModuleParamConstantsGroup finalConstantsGroup;
 extern const ModuleParamConstantsGroup slewModuleConstantsGroup;
 extern const ModuleParamConstantsGroup pitchConverterModuleConstantsGroup;
 extern const ModuleParamConstantsGroup pitchBendConverterConstantsGroup;
+extern const ModuleParamConstantsGroup channelPressureConstantsGroup;
+extern const ModuleParamConstantsGroup ccConverterConstantsGroup;
 extern const ModuleParamConstantsGroup strikeConstantsGroup;
 extern const ModuleParamConstantsGroup modalBankConstantsGroup;
 

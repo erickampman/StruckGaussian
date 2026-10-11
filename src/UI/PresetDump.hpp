@@ -25,7 +25,7 @@ namespace strucksynth {
 
 // Emit modules in this order; every module in kPresetKeys must appear here.
 static constexpr const char* kPresetModuleOrder[] = {
-   "Global", "Strike", "ModalBank",
+   "Global", "Strike", "ModalBank", "Expression",
 };
 
 // Build the module-nested JSON for `values` (kParamCount entries). Values are stringified like PM

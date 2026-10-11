@@ -7,6 +7,8 @@
 
 #include "ADSRModule.hpp"
 #include "CVMixerModule.hpp"
+#include "CCConverterModule.hpp"
+#include "ChannelPressureModule.hpp"
 #include "CombineModule.hpp"
 #include "FinalModule.hpp"
 #include "IFSEnvModule.hpp"
@@ -32,6 +34,12 @@ const std::vector<ModuleInitSpec>& getModuleInitSpecs() {
       {pitchBend1Address, &pitchBendConverterConstantsGroup, InitPitchBendConverter,
        DeinitPitchBendConverter, ProcessPitchBendConverter, MIDIPitchBendConverter, nullptr,
        ResetPitchBendConverter, nullptr},
+      // Pressure and Timbre (CC74, Per Note) sources for the Expression knobs.
+      {channelPressure1Address, &channelPressureConstantsGroup, InitChannelPressure,
+       DeinitChannelPressure, ProcessChannelPressure, MIDIChannelPressure, nullptr,
+       ResetChannelPressure, nullptr},
+      {timbre1Address, &ccConverterConstantsGroup, InitCCConverter, DeinitCCConverter,
+       ProcessCCConverter, MIDICCConverter, nullptr, ResetCCConverter, nullptr},
       {slew1Address, &slewModuleConstantsGroup, InitSlewModule, DeinitSlewModule, ProcessSlewModule,
        nullptr, nullptr, nullptr, nullptr},
       {sinOsc1Address, &sinOscConstantsGroup, InitSinOscillator, DeinitSinOscillator,

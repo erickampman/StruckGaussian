@@ -278,6 +278,20 @@ enum PitchConverterParamItem : NSUInteger {
    PitchConverterParamItemDummy = 1,
 };
 
+enum ChannelPressureParamItem : NSUInteger {
+   ChannelPressureParamItemDummy = 1,  // no params needed; one dummy slot
+   ChannelPressureParamItemMPE,        // 0/1: MPE lower zone
+};
+enum CCParamItem : NSUInteger {
+   CCParamItemNumber = 1,   // indexed: CC controller number 0..127
+   CCParamItemIsBoolean,    // 0/1: gate vs continuous
+   CCParamItemInput,        // connection: when patched, CC scales it (VCA)
+   CCParamItemAmount,       // CC scale (1 = unity)
+   CCParamItemOffset,       // floor added to the scaled CC (0 = none)
+   CCParamItemPerNote,      // 0/1: per-channel CC + same-index per-note controller
+   CCParamItemMPE,          // 0/1: with Per Note, MPE lower zone
+};
+
 enum PitchBendConverterParamItem : NSUInteger {
    PitchBendConverterParamItemQuarterTones = 1, // channel bend range, 0..8 quarter-tones; also the
                                                 // per-note range until registered controller 7 sets one
@@ -350,7 +364,7 @@ enum ModalBankParamItem : NSUInteger {
    ModalBankParamItemStretch,        // INDEX into kModalStretchValues (inharmonicity)
    // Decay
    ModalBankParamItemDecayT60,       // seconds, T60 of mode 0
-   ModalBankParamItemDecayModLevel,
+   ModalBankParamItemDecayModLevel,  // scales DecayModInput, in OCTAVES of T60 (+1 doubles it)
    ModalBankParamItemDampTilt,       // T60_i *= ratio^(-tilt); 0 metal, ~2 wood
    ModalBankParamItemDampBellAmount, // octaves of T60 at the centre; 0 = off
    ModalBankParamItemDampBellCentre, // octaves above the fundamental
@@ -368,6 +382,9 @@ enum ModalBankParamItem : NSUInteger {
    ModalBankParamItemPitchMod2Input, // connection: pitch bend, octaves — added AFTER PitchModLevel's
                                      // scaling, so a fixed-pitch body (level 0) still bends
    ModalBankParamItemPitchMod2Level, // scales PitchMod2Input (1 = octaves in, octaves out)
+   // Damping-tilt modulation (appended)
+   ModalBankParamItemDampTiltModInput, // connection: added to DampTilt, scaled by the level below
+   ModalBankParamItemDampTiltModLevel,
 };
 
 // Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials

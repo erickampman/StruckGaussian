@@ -71,10 +71,30 @@ The **MPE** switch (Global panel, off by default) treats input as an MPE lower z
   or 16; only its reset is honoured, the zone layout is the switch's) and when the switch is flipped,
   so a range set in one mode does not leak into the other. Otherwise, like RC 7, they survive a host
   `reset()`.
-- MPE's pressure and timbre (CC74) have no destination in StruckSynth yet.
+- MPE's pressure and timbre (CC74) drive the **Expression** knobs (below). A member note takes the
+  higher of its own value and the master channel's.
 - Presets don't store the switch: it describes the controller, not the sound.
 
 `~/Dev-MIDI/mpe-sender` plays scripted MPE tests for listening.
+
+### Expression: pressure and timbre
+
+Most of a struck note is fixed at the strike: strike position and Brightness only shape how the strike
+excites each mode, so moving them later changes nothing until the next strike. What a player can still
+change on a ringing note is how it decays. The **Expression** panel's three knobs follow that split;
+each is 0 by default, so nothing changes until you turn it, and a controller that sends no pressure or
+CC74 sounds the same with the knobs up.
+
+| Knob | Source | What it does | When |
+|---|---|---|---|
+| **Press>Decay** | pressure | decay time, ± octaves at full pressure (+2 = 4× longer). Positive: press to let it ring, ease off to damp it. Negative: pressing damps it, like a hand on a bar. | continuously, on the ringing note |
+| **Tmb>Tilt** | timbre (CC74) | added to **Damp** at full timbre: positive darkens the tail, negative brightens it | continuously, on the ringing note |
+| **Tmb>Pos** | timbre (CC74) | added to **Strike Pos** at full timbre: where your finger sits is where the mallet hits | at the strike |
+
+Pressure is channel pressure, poly pressure, or CLAP's Pressure note expression; timbre is CC74 on the
+note's channel, MIDI 2.0 per-note controller #74, or CLAP's Brightness. Per-note values win over the
+channel's. MPE controllers send a note's starting CC74 before its note-on, which is what Tmb>Pos reads.
+Both sources are PlainOldSynth's Pressure and Timbre modules, smoothed over 2 ms.
 
 **A note is note number + channel + group.** The same key on two channels is two voices with
 independent per-note state, and note-offs the engine generates itself (sustain-pedal release,
@@ -98,9 +118,9 @@ converted to MIDI 2.0 per-note messages:
 
 - **Tuning** becomes Pitch 7.25 at key + tuning, so it is exact at any size within Pitch 7.25's
   0–128 semitone span rather than clamped to the ±2 bend range.
-- **Pressure** becomes poly pressure and **Brightness** registered per-note controller #74. Nothing
-  in StruckSynth responds to either yet; they are routed so a future modulation source can.
-- Volume, Pan, Vibrato and Expression are ignored.
+- **Pressure** becomes poly pressure and **Brightness** registered per-note controller #74, which
+  drive the Expression knobs' pressure and timbre.
+- Volume, Pan, Vibrato and Expression (the CLAP expression of that name, not the panel) are ignored.
 
 An expression may name only a note id: tuning then looks up that note's key.
 

@@ -31,6 +31,11 @@
         "dampBellWidth": "0.400000",
         "strikePosition": "0.250000",
         "brightness": "0.000000"
+      },
+      "Expression": {
+        "pressToDecay": "0.000000",
+        "timbreToTilt": "0.000000",
+        "timbreToPos": "0.000000"
       }
     }
   }

@@ -40,6 +40,9 @@ static constexpr PresetKey kPresetKeys[kParamCount] = {
    // MPE describes the controller, not the sound: factory presets leave it out, and the loader keeps
    // the current value for any key a preset does not mention.
    /*Mpe*/             {"Global",    "mpe"},
+   /*PressToDecay*/    {"Expression", "pressToDecay"},
+   /*TimbreToTilt*/    {"Expression", "timbreToTilt"},
+   /*TimbreToPos*/     {"Expression", "timbreToPos"},
 };
 
 } // namespace strucksynth

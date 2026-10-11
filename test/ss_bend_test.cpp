@@ -727,6 +727,105 @@ void testReleasedNotes() {
    }
 }
 
+// --- Expression: Pressure -> Decay, Timbre (CC74) -> Damp Tilt and Strike Position -------------------
+// The plugin's Expression knobs are ModalBank's mod levels; set them directly here.
+
+// T60 of a decaying tone from its RMS in two windows `gap` seconds apart (60 dB / the fall rate).
+double measureT60(VoiceManager& vm, double gapSeconds) {
+   const uint32_t win = 4800;
+   auto rmsOf = [](const std::vector<float>& s) {
+      double e = 0.0; for (float x : s) e += double(x) * x; return std::sqrt(e / double(s.size()));
+   };
+   const double a = rmsOf(render(vm, win));
+   render(vm, uint32_t(gapSeconds * kSampleRate) - win);
+   const double b = rmsOf(render(vm, win));
+   const double dbPerSecond = 20.0 * std::log10(a / b) / gapSeconds;
+   return 60.0 / dbPerSecond;
+}
+
+void testExpression() {
+   std::printf("Expression (Pressure / Timbre):\n");
+   auto fresh = [](float t60) {
+      auto vm = std::make_unique<VoiceManager>(kSampleRate, kBlock);
+      configure(*vm);
+      setBank(*vm, ModalBankParamItemDecayT60, t60);
+      return vm;
+   };
+   auto near = [](double measured, double expected) { return std::fabs(measured / expected - 1.0) < 0.05; };
+   {  // Press>Decay, acting on a ringing note: full pressure at +2 octaves quadruples the decay time.
+      auto vm = fresh(0.5f);
+      setBank(*vm, ModalBankParamItemDecayModLevel, 2.0f);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      render(*vm, 2048);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xD0, 127, 0));     // full channel pressure, after the strike
+      render(*vm, 1024);
+      const double held = measureT60(*vm, 0.5);
+      check(near(held, 2.0), "Press>Decay +2 oct: full pressure stretches T60 0.5 s to 2 s (" + num(held) + " s)");
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xD0, 0, 0));       // ease off
+      render(*vm, 1024);
+      const double eased = measureT60(*vm, 0.3);
+      check(near(eased, 0.5), "easing off damps it back to 0.5 s (" + num(eased) + " s)");
+   }
+   {  // Negative: pressing damps the note, like a hand on a bar.
+      auto vm = fresh(2.0f);
+      setBank(*vm, ModalBankParamItemDecayModLevel, -2.0f);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xD0, 127, 0));
+      render(*vm, 2048);
+      const double damped = measureT60(*vm, 0.3);
+      check(near(damped, 0.5), "Press>Decay -2 oct: pressing shortens T60 2 s to 0.5 s (" + num(damped) + " s)");
+   }
+   {  // At 0 (the default) pressure changes nothing.
+      auto vm = fresh(0.5f);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xD0, 127, 0));
+      render(*vm, 2048);
+      const double t = measureT60(*vm, 0.5);
+      check(near(t, 0.5), "Press>Decay 0: pressure leaves T60 alone (" + num(t) + " s)");
+   }
+
+   // Two harmonic modes, C4 and C5, equal decay at Damp 0: tilt then shortens the upper one.
+   auto twoModes = [&](float t60) {
+      auto vm = fresh(t60);
+      setBank(*vm, ModalBankParamItemModeCount, 2.0f);
+      setBank(*vm, ModalBankParamItemDampTilt, 0.0f);
+      return vm;
+   };
+   const double c4 = pm::noteToFrequency(60), c5 = pm::noteToFrequency(72);
+   auto upperShare = [&](const std::vector<float>& s) { return toneLevel(s, c5) / toneLevel(s, c4); };
+   {  // Tmb>Tilt, acting on a ringing note: CC74 after the strike darkens the tail.
+      auto plain = twoModes(4.0f), tilted = twoModes(4.0f);
+      setBank(*tilted, ModalBankParamItemDampTiltModLevel, 2.0f);
+      for (VoiceManager* vm : { plain.get(), tilted.get() }) {
+         vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+         render(*vm, 2048);
+         vm->handleMIDIMessage(pm::fromMidi1Bytes(0xB0, 74, 127));   // after the strike
+         render(*vm, uint32_t(kSampleRate));
+      }
+      const double p = upperShare(render(*plain, 9600)), t = upperShare(render(*tilted, 9600));
+      check(t < 0.5 * p, "Tmb>Tilt +2: CC74 after the strike makes the upper mode die faster (upper/fundamental "
+                             + num(t) + " vs " + num(p) + " untilted)");
+   }
+   {  // Tmb>Pos, read at the strike: strike position 0.25 + 0.25 = 0.5 cancels the even (upper) mode.
+      auto vm = twoModes(4.0f);
+      setBank(*vm, ModalBankParamItemStrikeModLevel, 0.25f);
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xB0, 74, 127));      // CC74 before the note, as MPE sends it
+      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      const double atHalf = upperShare(render(*vm, 9600));
+      auto plain = twoModes(4.0f);
+      setBank(*plain, ModalBankParamItemStrikeModLevel, 0.25f);
+      plain->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+      const double atQuarter = upperShare(render(*plain, 9600));
+      check(atHalf < 0.01 && atQuarter > 0.3, "Tmb>Pos +0.25: CC74 at the strike moves it to 0.5 and cancels the even mode ("
+                                                  + num(atHalf) + " vs " + num(atQuarter) + ")");
+      plain->handleMIDIMessage(pm::fromMidi1Bytes(0xB0, 74, 127));   // after the strike: too late to matter
+      render(*plain, 2048);
+      const double later = upperShare(render(*plain, 9600));
+      check(std::fabs(later / atQuarter - 1.0) < 0.05, "CC74 after the strike leaves the ringing note's modes alone ("
+                                                           + num(later) + ")");
+   }
+}
+
 // --- channel mode messages: CC 123 All Notes Off, CC 120 All Sound Off ------------------------------
 void testChannelModeMessages() {
    std::printf("All Notes Off / All Sound Off:\n");
@@ -838,6 +937,7 @@ int main() {
    testVelocity();
    testChannelModeMessages();
    testReleasedNotes();
+   testExpression();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);
