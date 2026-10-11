@@ -112,13 +112,16 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
     ModalBank& bank = st->bank;
 
     // --- pitch: PM octaves -> Hz -------------------------------------------
-    // octaves = Pitch (transpose) + PitchModLevel * PitchInput (note tracking).
+    // octaves = Pitch (transpose) + PitchModLevel * PitchInput (note tracking)
+    //         + PitchMod2Level * PitchMod2Input (pitch bend).
     // PitchModLevel defaults to 1 (unity tracking) and 0 gives a fixed-pitch
-    // body resonator.
+    // body resonator. The bend input is scaled separately, so it still bends one.
     const float pitchParam = module->getParamValue(ModalBankParamItemPitch);
     const float pitchLevel = module->getParamValue(ModalBankParamItemPitchModLevel);
     const float pitchIn    = readControl(module, ModalBankParamItemPitchInput, processCallID, count);
-    const float octaves    = pitchParam + pitchLevel * pitchIn;
+    const float bendLevel  = module->getParamValue(ModalBankParamItemPitchMod2Level);
+    const float bendIn     = readControl(module, ModalBankParamItemPitchMod2Input, processCallID, count);
+    const float octaves    = pitchParam + pitchLevel * pitchIn + bendLevel * bendIn;
     bank.setFundamental((float)module->pitchConverter->pitchToFrequency(octaves));
 
     // --- object ------------------------------------------------------------

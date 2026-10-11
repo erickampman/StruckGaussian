@@ -32,19 +32,23 @@ PolygraphModular headers stay on that code's own warning style.
 
 ## What each test covers
 
-The eight CTest cases exercise the `pm_framework` engine end-to-end (the DPF plugin wrapper
-itself is covered by `clap-validator`, below):
+Eleven CTest cases exercise the `pm_framework` engine end-to-end; `ss-clap` drives the built plugin
+itself, and `clap-validator` (below) checks CLAP conformance:
 
 | CTest name       | Executable               | Verifies |
 |------------------|--------------------------|----------|
 | `pm`             | `pm-selftest`            | UMP MIDI layer: predicates, raw-word decode, microtonal pitch attribute, CLAP→UMP decoders |
 | `pm-module`      | `pm-module-test`         | `Module` + `ModuleMap` core: param read/write, process proc, map add/get |
 | `pm-sinosc`      | `pm-sinosc-test`         | The vendored sine oscillator produces an ~A440 sine |
+| `pm-ifscore`     | `pm-ifscore-test`        | IFSCore's per-point smoothed eval matches its wavetable (the IFS modules inherited from IFSynth) |
 | `pm-adsr`        | `pm-adsr-test`           | ADSR envelope: note-on drives attack, note-off drives release to ~0 |
 | `pm-modules`     | `pm-modules-test`        | Combine / Final / Slew compile+run; PitchConverter maps note→pitch |
-| `pm-factory`     | `pm-factory-test`        | ModuleFactory + the trimmed init-specs build all six v1 modules |
+| `pm-factory`     | `pm-factory-test`        | ModuleFactory + the init-specs build all 19 registered modules |
 | `pm-voice`       | `pm-voice-test`          | One full voice renders a note end-to-end and releases |
+| `pm-modroute`    | `pm-modroute-test`       | Modulation routing at the voice level: connecting a mod source switches the destination's path |
 | `pm-voicemanager`| `pm-voicemanager-test`   | Polyphony: a 3-note chord allocates 3 voices and frees them on release |
+| `ss-bend`        | `ss-bend-test`           | MIDI 2.0 per-note decode; channel and per-note pitch bend (pitch measured on a single-mode bank); note matching on note + channel + group; pedal / all-notes-off / panic release notes on any channel |
+| `ss-clap`        | `ss-clap-host-test`      | The built `.clap` over the CLAP C API: note-port dialects, params + state, 7.9-pitch notes, per-note and channel bend reach the resonator |
 
 ## Running a single test
 

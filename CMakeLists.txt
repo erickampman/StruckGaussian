@@ -29,6 +29,7 @@ add_library(pm_framework STATIC
     src/Module/CombineModule.cpp
     src/Module/FinalModule.cpp
     src/Module/SlewModule.cpp
+    src/Module/PitchBendConverterModule.cpp
     src/Module/PitchConverterModule.cpp
     src/Module/ModalBankModule.cpp
     src/Module/ModalBank.cpp
@@ -218,6 +219,9 @@ target_link_libraries(pm-modroute-test PRIVATE pm_framework)
 add_executable(pm-voicemanager-test test/pm_voicemanager_test.cpp)
 target_link_libraries(pm-voicemanager-test PRIVATE pm_framework)
 
+add_executable(ss-bend-test test/ss_bend_test.cpp)
+target_link_libraries(ss-bend-test PRIVATE pm_framework)
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     # pm-selftest only pulls in light headers → fully strict (optionally -Werror in CI).
     target_compile_options(pm-selftest PRIVATE -Wall -Wextra)
@@ -226,7 +230,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     endif()
     # tests that pull in vendored headers → relaxed (unused params in inline methods).
     foreach(t pm-module-test pm-sinosc-test pm-ifscore-test pm-adsr-test pm-modules-test pm-factory-test
-              pm-voice-test pm-voicemanager-test pm-modroute-test)
+              pm-voice-test pm-voicemanager-test pm-modroute-test ss-bend-test)
         target_compile_options(${t} PRIVATE -Wall -Wno-unknown-pragmas -Wno-unused-parameter)
     endforeach()
 endif()
@@ -261,6 +265,9 @@ set_tests_properties(pm-modroute PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
 
 add_test(NAME pm-voicemanager COMMAND pm-voicemanager-test)
 set_tests_properties(pm-voicemanager PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
+
+add_test(NAME ss-bend COMMAND ss-bend-test)
+set_tests_properties(ss-bend PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
 
 # --- end-to-end CLAP host test: note-port dialect negotiation + the MIDI 2.0 7.9-pitch path ------
 # Drives the real built .clap over the CLAP C API (no DAW, no GUI): dlopen + clap_entry + factory,

@@ -26,6 +26,33 @@ MIDI notes are sample-accurate: `process()` splits rendering at each event's fra
 Parameter changes are applied per host block, and the note port advertises (and prefers) the MIDI
 2.0 dialect, so a 7.9-pitch NoteOn reaches the resonator unchanged.
 
+### Pitch bend: channel and per-note
+
+Every voice has a `PitchBendConverter` (`src/Module/PitchBendConverterModule.cpp`, ported from
+PlainOldSynth) feeding ModalBank's second pitch input. That input comes **after** the Slew, so glide
+never smears a bend, and it is scaled on its own, so a fixed-pitch body (Pitch Mod Level 0) still
+bends. It sums two bends:
+
+- **Channel pitch bend** (MIDI 1.0 or 2.0), **±2 semitones**. Each voice remembers the latest bend of
+  every channel and applies the one its own note was played on: ordinary pitch bend with everything on
+  one channel, and per-note bend when each note has its own channel (MPE-style). MPE's master-channel
+  bend is not implemented yet.
+- **MIDI 2.0 per-note pitch bend** (UMP status `0x6`), **±48 semitones** by default (the MPE
+  convention). It bends only the note it names. A controller sets its own range per channel with
+  MIDI 2.0 **registered controller 7** (per-note pitch bend sensitivity), as KeyboardEDO does; that
+  range survives a host `reset()`, since it is configuration the controller sends once.
+
+Bend changes ramp over 2 ms, and a note starts at its bent pitch. ModalBank retunes its modes once per
+block without resetting them, so a bend glides the ringing tail rather than re-striking it. Per-note
+bend resets on every note-on and on a per-note management Reset; one sent *before* its note-on is
+dropped, because no voice owns that note yet. Neither default range is a host parameter yet, and
+RPN 0 (channel bend range) is not handled yet.
+
+**A note is note number + channel + group.** The same key on two channels is two voices with
+independent per-note state, and note-offs the engine generates itself (sustain-pedal release,
+all-notes-off, panic) are built from the voice's own note-on so they match. In mono, per-note
+expression for a held-but-silent note in the stack doesn't move the sounding note.
+
 The [DISTRHO Plugin Framework (DPF)](https://github.com/DISTRHO/DPF) is used **only as the GUI
 layer** (UIExporter + NanoVG + pugl). The CLAP entry point is hand-written in `src/plugin.cpp`,
 because DPF's generated CLAP wrapper drops `CLAP_EVENT_MIDI2` and advertises only the MIDI/MPE note

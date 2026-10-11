@@ -278,6 +278,11 @@ enum PitchConverterParamItem : NSUInteger {
    PitchConverterParamItemDummy = 1,
 };
 
+enum PitchBendConverterParamItem : NSUInteger {
+   PitchBendConverterParamItemQuarterTones = 1, // channel bend range, 0..8 quarter-tones
+   PitchBendConverterParamItemPerNoteSemitones, // MIDI 2.0 per-note bend range, semitones
+};
+
 // Referenced by Voice::connectTunnelPairs (no tunnel modules in the v1 patch, but it must compile).
 enum TunnelOutParamItem : NSUInteger {
    TunnelOutParamItemInput = 1,
@@ -329,7 +334,7 @@ enum StrikeContactMode : NSUInteger {
 // --- StruckSynth: ModalBank (resonator) --------------------------------------------------
 // A bank of independently damped two-pole resonators, one per vibrational mode, excited by an
 // input signal. Items 1-5 are connection ports; the rest are object/decay/strike/output
-// controls. Core (framework-free): ModalBank.hpp/.cpp, ModalMaterials/Generators.hpp.
+// controls, plus a second pitch input appended at the end (appended so existing addresses stay put). Core (framework-free): ModalBank.hpp/.cpp, ModalMaterials/Generators.hpp.
 enum ModalBankParamItem : NSUInteger {
    ModalBankParamItemInput = 1,      // connection: excitation audio in (L/R)
    ModalBankParamItemPitchInput,     // connection: from Pitch Converter; octaves re A440
@@ -358,6 +363,10 @@ enum ModalBankParamItem : NSUInteger {
    ModalBankParamItemSpread,         // stereo distribution of modes
    ModalBankParamItemMix,            // 1 = source, <1 = resonator in a path
    ModalBankParamItemLevel,
+   // Second pitch input
+   ModalBankParamItemPitchMod2Input, // connection: pitch bend, octaves — added AFTER PitchModLevel's
+                                     // scaling, so a fixed-pitch body (level 0) still bends
+   ModalBankParamItemPitchMod2Level, // scales PitchMod2Input (1 = octaves in, octaves out)
 };
 
 // Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials

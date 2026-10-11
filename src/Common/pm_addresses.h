@@ -139,5 +139,12 @@ inline constexpr AUParameterAddress modalBank1InputAddress =
    MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemInput);
 inline constexpr AUParameterAddress modalBank1PitchInputAddress =
    MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemPitchInput);
+// Second pitch input: the pitch-bend CV, which bypasses the Slew (glide must not smear a bend).
+inline constexpr AUParameterAddress modalBank1PitchMod2InputAddress =
+   MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemPitchMod2Input);
+
+// --- Pitch bend converter (channel bend + MIDI 2.0 per-note bend → octaves) ---------------
+inline constexpr AUParameterAddress pitchBend1Address =
+   MODULE_PARAM_ADDRESS(ModuleParamKindPitchBendConverter, ModuleInstance1, 0);
 
 #endif // PM_ADDRESSES_H

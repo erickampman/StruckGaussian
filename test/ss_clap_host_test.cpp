@@ -338,9 +338,10 @@ clap_event_midi_t makeMidi1(uint8_t status, uint8_t data1, uint8_t data2) {
     return event;
 }
 
-// Render one note through a fresh instance with the test patch, and report the measured pitch.
-double pitchOfNote(Library& lib, const clap_event_header_t* noteEvent, double expectedHz,
-                   const char* what) {
+// Render events (a note, plus anything that shapes it) through a fresh instance with the test patch,
+// and report the measured pitch.
+double pitchOfEvents(Library& lib, const clap_event_header_t** events, uint32_t eventCount,
+                     double expectedHz, const char* what) {
     Instance inst;
     if (!inst.create(lib)) {
         check(false, std::string(what) + ": plugin instance created");
@@ -348,8 +349,7 @@ double pitchOfNote(Library& lib, const clap_event_header_t* noteEvent, double ex
     }
     installTestPatch(inst.plugin);
 
-    const clap_event_header_t* events[] = { noteEvent };
-    const std::vector<float> audio = render(inst.plugin, uint32_t(kSampleRate), events, 1);
+    const std::vector<float> audio = render(inst.plugin, uint32_t(kSampleRate), events, eventCount);
 
     bool finite = true;
     for (float s : audio) if (!std::isfinite(s)) finite = false;
@@ -362,6 +362,12 @@ double pitchOfNote(Library& lib, const clap_event_header_t* noteEvent, double ex
     check(peak > 0.01f, std::string(what) + ": produces audio");
     inst.destroy();
     return pitch;
+}
+
+double pitchOfNote(Library& lib, const clap_event_header_t* noteEvent, double expectedHz,
+                   const char* what) {
+    const clap_event_header_t* events[] = { noteEvent };
+    return pitchOfEvents(lib, events, 1, expectedHz, what);
 }
 
 } // namespace
@@ -582,6 +588,48 @@ int main(int argc, char** argv) {
         check(std::fabs(hzZero - kC4Hz) / kC4Hz < 0.10, "7.9 fraction 0 sounds near C4 in absolute terms");
     } else {
         check(false, "both 7.9-pitch notes produced a measurable pitch");
+    }
+
+    // --- pitch bend through the real plugin -------------------------------------------------------
+    // Proves the bend CV reaches ModalBank's second pitch input at full depth, not just in the engine.
+    std::printf("Pitch bend through the real plugin:\n");
+    {
+        const clap_event_midi2_t noteOn = makeUmpNoteOn(uint8_t(kNote), 0xFFFF, 0, 0);
+        clap_event_midi2_t bend = noteOn;
+        bend.data[0] = (0x4u << 28) | (0x6u << 20) | (uint32_t(kNote) << 8);                // per-note bend
+        bend.data[1] = uint32_t(std::llround(2147483648.0 + 3.0 / 48.0 * 2147483648.0));   // +3 of ±48
+        const clap_event_header_t* events[] = { &noteOn.header, &bend.header };
+        const double expected = kC4Hz * std::pow(2.0, 3.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 2, expected, "MIDI 2.0 per-note bend +3");
+        // Against the measured unbent C4, as for the 7.9 check: the patch's absolute pitch reads a
+        // little sharp (64 modes, clipped), but a bend must move it by the exact interval.
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 3.0 / 12.0)) < 0.002,
+              "a per-note bend of +3 semitones moves C4 to D#4");
+    }
+    {
+        // KeyboardEDO's setup: announce a ±2 per-note range (registered controller 7), then bend
+        // half way up, which it means as +1 semitone.
+        clap_event_midi2_t range = makeUmpNoteOn(0, 0, 0, 0);
+        range.data[0] = (0x4u << 28) | (0x2u << 20) | (0u << 8) | 7u;
+        range.data[1] = 2u << 25;
+        const clap_event_midi2_t noteOn = makeUmpNoteOn(uint8_t(kNote), 0xFFFF, 0, 0);
+        clap_event_midi2_t bend = noteOn;
+        bend.data[0] = (0x4u << 28) | (0x6u << 20) | (uint32_t(kNote) << 8);
+        bend.data[1] = 0xC0000000u;                                                        // half way up
+        const clap_event_header_t* events[] = { &range.header, &noteOn.header, &bend.header };
+        const double expected = kC4Hz * std::pow(2.0, 1.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 3, expected, "per-note bend at RC7 = 2");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
+              "registered controller 7 sets the per-note range: half way at ±2 is +1 semitone");
+    }
+    {
+        const clap_event_midi_t bend = makeMidi1(0xE0, 0x00, 0x60);   // half way up: +1 of ±2
+        const clap_event_midi_t noteOn = makeMidi1(0x90, uint8_t(kNote), 100);
+        const clap_event_header_t* events[] = { &bend.header, &noteOn.header };
+        const double expected = kC4Hz * std::pow(2.0, 1.0 / 12.0);
+        const double hz = pitchOfEvents(lib, events, 2, expected, "MIDI 1.0 channel bend +1");
+        check(hzZero > 0.0 && std::fabs(hz / hzZero - std::pow(2.0, 1.0 / 12.0)) < 0.002,
+              "a MIDI 1.0 channel bend of +1 semitone moves C4 to C#4");
     }
 
     // --- the MIDI-1.0 / CLAP dialects still work -------------------------------------------------

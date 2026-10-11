@@ -203,6 +203,16 @@ const ModuleParamConstantsGroup pitchConverterModuleConstantsGroup = {
    const_cast<char*>("pitchConverter"),
    sizeof(pitchConverterConstants) / sizeof(pitchConverterConstants[0]), pitchConverterConstants};
 
+// Pitch bend converter — MIDI 2.0 pitch bend → a bipolar octaves signal. Channel bend range in
+// quarter-tones; per-note bend range in semitones (±48 by default, the MPE convention).
+static const ModuleParamConstants pitchBendConverterConstants[] = {
+   {"quarterTones",     PitchBendConverterParamItemQuarterTones,     0, 0, nullptr, 0.0f, 8.0f,  4.0f,  0},
+   {"perNoteSemitones", PitchBendConverterParamItemPerNoteSemitones, 0, 0, nullptr, 0.0f, 96.0f, 48.0f, 0},
+};
+const ModuleParamConstantsGroup pitchBendConverterConstantsGroup = {
+   const_cast<char*>("Pitch Bend"),
+   sizeof(pitchBendConverterConstants) / sizeof(pitchBendConverterConstants[0]), pitchBendConverterConstants};
+
 // Strike — note/gate → shaped excitation burst. Defaults from PM (ParamGroupData.m): Mallet,
 // hardness 0.3, note-relative contact, level 1. Items 1-2 (gate/hardness) are connection ports.
 static const ModuleParamConstants strikeConstants[] = {
@@ -245,6 +255,8 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"spread",         ModalBankParamItemSpread,         0, 0, nullptr, 0.0f, 1.0f, 0.3f, 0},
    {"mix",            ModalBankParamItemMix,            0, 0, nullptr, 0.0f, 1.0f, 1.0f, 0},
    {"level",          ModalBankParamItemLevel,          0, 0, nullptr, 0.0f, 2.0f, 0.5f, 0},
+   {"pitchMod2Input", ModalBankParamItemPitchMod2Input, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection (pitch bend)
+   {"pitchMod2Level", ModalBankParamItemPitchMod2Level, 0, 0, nullptr, -5.0f, 5.0f, 1.0f, 0},
 };
 const ModuleParamConstantsGroup modalBankConstantsGroup = {
    const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};
