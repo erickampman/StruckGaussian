@@ -6,6 +6,7 @@
 #ifndef STRUCKSYNTH_PARAMS_H
 #define STRUCKSYNTH_PARAMS_H
 
+#include <cstddef>
 #include <cstdint>
 
 namespace strucksynth {
@@ -87,6 +88,30 @@ static constexpr const char* kMaterialNames[] = {
    "Golden", "Silver", "Piano", "Power", "Sqrt", "Box 3D", "Harmonic #",
    nullptr,
 };
+static_assert(sizeof(kMaterialNames) / sizeof(kMaterialNames[0]) - 1
+                 == std::size_t(kParams[kParamMaterial].max) + 1,
+              "kMaterialNames and the Material parameter's range disagree");
+
+// kParams is indexed by ParamIndex, so a swapped pair of rows compiles fine and silently cross-wires
+// two controls (PlainOldSynth's Effect Mix and Spread once did exactly that). The table is small, so
+// check every row's symbol against the enum rather than spot-checking.
+constexpr bool symbolIs(ParamIndex index, const char* symbol)
+{
+   const char* a = kParams[index].symbol;
+   while (*a != '\0' && *a == *symbol) { ++a; ++symbol; }
+   return *a == *symbol;
+}
+static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glide")
+              && symbolIs(kParamLevel, "level") && symbolIs(kParamSpread, "spread")
+              && symbolIs(kParamStrikeType, "strkType") && symbolIs(kParamHardness, "hardness")
+              && symbolIs(kParamVelToLevel, "velLevel") && symbolIs(kParamVelToHardness, "velHard")
+              && symbolIs(kParamContactMode, "contact") && symbolIs(kParamPitch, "pitch")
+              && symbolIs(kParamMaterial, "material") && symbolIs(kParamModeCount, "modes")
+              && symbolIs(kParamStretch, "stretch") && symbolIs(kParamDecayT60, "decay")
+              && symbolIs(kParamDampTilt, "dampTilt") && symbolIs(kParamDampBellAmount, "bellAmt")
+              && symbolIs(kParamDampBellCentre, "bellCtr") && symbolIs(kParamDampBellWidth, "bellWid")
+              && symbolIs(kParamStrikePosition, "strkPos") && symbolIs(kParamBrightness, "bright"),
+              "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------
 // One source of truth for "is this parameter stepped-with-labels, and what are the labels": the
