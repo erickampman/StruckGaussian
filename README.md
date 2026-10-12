@@ -170,13 +170,14 @@ Presets/              factory presets (JSON), compiled into GeneratedPresets.h b
                         tools/gen_presets.py
 Resources/            font + logo, embedded into the binary at build time
 test/                 in-process self-tests (see TESTING.md)
-dpf/                  DISTRHO Plugin Framework (submodule, + nested pugl) — generates the .clap
-external/clap         CLAP headers (submodule, pinned 1.2.9) — used by the framework self-tests
+dpf/                  DISTRHO Plugin Framework (submodule, + nested pugl) — the GUI layer only
+external/clap         CLAP headers (submodule, pinned 1.2.9) — the plugin and the tests
 ```
 
 Vendored PolygraphModular files keep their original `#include "X.hpp"` form; every framework
-folder is on the include path so they resolve across `Common/` `Module/` `Voice/`. The DSP
-wrapper links the `pm_framework` static lib; DPF owns the plugin/UI lifecycle.
+folder is on the include path so they resolve across `Common/` `Module/` `Voice/`. The plugin
+links the `pm_framework` static lib; DPF's `UIExporter` hosts the editor inside the CLAP gui
+extension.
 
 ## Build
 

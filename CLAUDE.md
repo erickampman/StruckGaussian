@@ -1,0 +1,83 @@
+# StruckSynth
+
+A CLAP modal-synthesis instrument: Strike → ModalBank → Final on the vendored PolygraphModular engine
+(`src/Common`, `src/Module`, `src/Voice`), a hand-written CLAP entry point (`src/plugin.cpp`), and DPF
+used only for the GUI (`src/UI/`). Start with README.md and TESTING.md.
+
+Sibling synths, on the same engine and the same raw-CLAP layout. Paths: `~/Dev-Audio/<name>` on the Mac,
+`~/dev/dev-clap/<name>` on the Linux PC (as `docs/BuildNotes.md` in IFSynth and StruckSynth shows):
+- **PlainOldSynth** (`~/Dev-Audio/PlainOldSynth`, branch `main`), where most MIDI 2.0 work starts
+- **IFSynth** (`~/Dev-Audio/IFSynth`, branch **`master`**), ported from this repo on 2026-10-12
+
+## Working with the author
+
+- Commit to `main` directly. Never open pull requests. Ask before pushing.
+- Ask before anything UI-visible: new parameters, panel controls, dropdown entries.
+- Parameters are **appended**, never inserted: CLAP parameter ids are the indexes. Each new one needs
+  its `symbolIs` check in `plugin/StruckSynthParams.h`. Sound parameters get a preset key and a line in
+  every `Presets/*.json`, added as text; controller setup (MPE) stays out of presets.
+- Before each commit: `ctest --test-dir build` and `clap-validator validate build/StruckSynth.clap`.
+- After a rebuild the author must **quit and restart the host** (StageHand, REAPER, Bitwig): a running
+  host keeps the binary it first loaded. Say so when asking them to listen.
+
+## Cross-project policy
+
+- **MPE**: the synths accept MPE as a compatibility input (an Off/On switch, lower zone) and never send
+  it. Nothing in StageHand, Umpire or KeyboardEDO originates MPE. MIDI 2.0 per-note messages and CLAP
+  note expressions are the preferred path.
+- MIDI 2.0 spec on the Mac: `~/Documents/MIDI/MIDI_2-0_Specification_Version_1-0 2/` (M2-104 is v1.0,
+  Feb 2020; registered controller 7 is from a later revision and not in it).
+
+## The MIDI 2.0 / MPE / CLAP port (2026-10-11): done
+
+PlainOldSynth's changes of 2026-10-09..11, brought here one commit each, in this order:
+`53e642f` raw CLAP entry point · `a256ccc` kParams order guard · `4ed5f93` Retina / multi-monitor
+editor size · `586cee7` per-note bend, registered controller 7, note + channel + group matching ·
+`7baf056` per-note bend range = the channel's · `c32681d` CLAP note ids and note expressions, Pitch
+7.25 · `3cf2f03` NOTE_END + voice-info · `d7258a2` MPE + RPN 0 · `76d53ca` MIDI 1.0 → 2.0 scaling,
+velocity-0 note-on · `30a1ca6` All Notes Off / All Sound Off · `b43e91b` released notes (MPE §3.3.3) ·
+`72b75ae` Expression panel.
+
+Where StruckSynth differs from PlainOldSynth:
+- No VCA: the bank's T60 decay is the envelope, so a voice rings on after note-off and NOTE_END comes
+  when it falls silent.
+- Bend enters ModalBank through an appended second pitch input (`ModalBankParamItemPitchMod2Input`),
+  after the Slew. There is no `Module::legatoContinuation` here, so the bend snaps on every note-on.
+- No Velocity loudness dropdown: Strike already does velocity → level and hardness.
+- Pressure and timbre (item 3) are a fixed Expression panel, the author's choice: Press > Decay,
+  Tmb > Tilt, Tmb > Pos, with PlainOldSynth's ChannelPressure and CCConverter vendored as sources.
+
+Known follow-up: `state_load` (in `src/plugin.cpp`) calls `applyAllParams` on the main thread, which
+can rewire the voice graph under a running `process()`. IFSynth (`9cab332`) only stores the values
+there and lets the next block apply them; port that.
+
+## On Linux
+
+The Mac is where this was developed; on Linux only CI has built it. Its ubuntu/gcc job failed from the
+raw-CLAP commit until `5bf099a`, which builds every static library with `-fPIC`. Since then CI is green
+on ubuntu gcc and clang, including the `ss-clap` host test, which loads the built `.clap` and plays it
+headless; so the plugin loads and sounds right on Linux, but nobody has seen its editor.
+
+A checkout from before 2026-10-11 is far behind. To catch up:
+
+1. `git pull` and `git submodule update --init --recursive`.
+2. **Configure a fresh build directory** (`rm -rf build`): the move off `dpf_add_plugin` renamed the
+   targets and moved the output to `build/StruckSynth.clap`. Then
+   `cmake --build build --target install-clap` re-points `~/.clap/StruckSynth.clap` at it (it is a
+   separate target, so an ordinary build never writes outside the build tree).
+3. Packages: README's Build section (X11 and GL development headers). If configure or link asks for
+   more, PlainOldSynth's README lists the full set its Linux CI installs.
+4. `ctest --test-dir build --output-on-failure`, then `clap-validator validate build/StruckSynth.clap`.
+
+Never checked on Linux, so check these by hand and record what you find in this file:
+- The editor under X11 through the raw CLAP gui extension (`CLAP_WINDOW_API_X11` in
+  `src/UI/StruckSynthUI.cpp`): correct size on load, resizing, clicks landing on the right controls.
+- The Presets menu and the logo link.
+- Sound and MIDI in **StageHand** (`~/dev/dev-audio/StageHand`; Linux-first: JACK through PipeWire, the
+  ALSA sequencer) and REAPER.
+
+macOS-only pieces: `src/UI/BackingScale_mac.mm` (Retina scale; built only on Apple).
+
+Test MIDI sources: mpe-sender (`~/Dev-MIDI/mpe-sender` on the Mac) is macOS-only (CoreMIDI), and KeyboardEDO has no Linux MIDI
+output until uw-core's ALSA output (its roadmap milestone 3b). On Linux use a hardware controller,
+StageHand, or the headless `ss-clap` and `ss-bend` tests, which send MIDI 2.0, MPE and CLAP events.
