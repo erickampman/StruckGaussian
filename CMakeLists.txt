@@ -93,6 +93,9 @@ add_subdirectory(dpf)
 # dgl-opengl is normally created by dpf_add_plugin()'s UI_TYPE branch; call the same helper
 # directly. SHARED_RESOURCES=TRUE embeds DGL's DejaVu font (fontFace(NANOVG_DEJAVU_SANS_TTF)).
 dpf__add_dgl_opengl(TRUE FALSE FALSE)
+# DGL is vendored, so its warnings are not ours to fix: gcc's "<cstdbool> is deprecated" #warning
+# from pugl.hpp under C++17+, and a stringop-overflow false positive in nanovg's stb_image.h.
+target_compile_options(dgl-opengl PRIVATE -w)
 
 # --- strucksynth_core: the whole plugin (DSP + host glue + GUI shell) as one static archive ----
 # Shared by the .clap output below. Hidden visibility for our own objects, so clap_entry — marked
@@ -122,6 +125,9 @@ target_compile_definitions(strucksynth_core PUBLIC
     STRUCKSYNTH_VERSION_STRING="${PROJECT_VERSION}")
 target_link_libraries(strucksynth_core PUBLIC pm_framework dgl-opengl)
 add_dependencies(strucksynth_core generate_presets generate_resources)
+# These two reach pugl.hpp through DPF's private UI headers; mute only its <cstdbool> #warning.
+set_source_files_properties(src/UI/StruckSynthUI.cpp "${DPF_ROOT_DIR}/distrho/src/DistrhoUI.cpp"
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:GNU>:-Wno-cpp>")
 dpf__add_plugin_specific_ui_sources(strucksynth_core FALSE)   # macOS: DistrhoUI_macOS.mm
 if(APPLE)
     # The live Retina scale of the host window (see the file's header comment).

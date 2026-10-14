@@ -163,7 +163,6 @@ bool VoiceManager::freeRunning() {
 
 void VoiceManager::noteOn(const pm::UmpMessage& msg) {
     LOG_VM("VoiceManager::noteOn entrypoint");
-    uint32_t maxVoices = uint32_t(voiceManagerParamByEnum(MIDIParamItemVoiceCount));
 
     // needed?
     if (freeRunning()) {
@@ -409,8 +408,6 @@ void VoiceManager::process(uint32_t frameCount, float *left, float *right)
     std::fill_n(left, frameCount, 0.f);
     std::fill_n(right, frameCount, 0.f);
 
-    uint32_t maxVoices = uint32_t(voiceManagerParamByEnum(MIDIParamItemVoiceCount));
-    
     for (size_t i = 0; i < voices.size(); ++i) {
         auto& v = voices[i];
         if (!v) continue;
