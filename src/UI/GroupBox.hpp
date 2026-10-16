@@ -86,13 +86,13 @@ protected:
         // panel fill (slightly raised from the window background)
         beginPath();
         roundedRect(1.5f, 1.5f, w - 3.0f, h - 3.0f, 8.0f);
-        fillColor(Color(30, 33, 39));
+        fillColor(Color(42, 34, 26));
         fill();
 
         // border
         beginPath();
         roundedRect(1.5f, 1.5f, w - 3.0f, h - 3.0f, 8.0f);
-        strokeColor(Color(60, 64, 72));
+        strokeColor(Color(74, 62, 48));
         strokeWidth(1.5f);
         stroke();
 

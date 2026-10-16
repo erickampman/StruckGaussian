@@ -87,9 +87,9 @@ protected:
         const float w = getWidth(), h = getHeight();
 
         // Panel background + border.
-        beginPath(); roundedRect(0, 0, w, h, 6); fillColor(Color(28, 31, 37)); fill();
+        beginPath(); roundedRect(0, 0, w, h, 6); fillColor(Color(42, 34, 26)); fill();
         beginPath(); roundedRect(0.5f, 0.5f, w - 1, h - 1, 6);
-        strokeColor(Color(58, 62, 70)); strokeWidth(1.0f); stroke();
+        strokeColor(Color(74, 62, 48)); strokeWidth(1.0f); stroke();
 
         const float padX = 12, padTop = 10, padBot = 16;
         const float x0 = padX, x1 = w - padX, y1 = h - padBot;
@@ -339,7 +339,7 @@ protected:
     void onNanoDisplay() override
     {
         const float w = getWidth(), h = getHeight();
-        beginPath(); rect(0, 0, w, h); fillColor(Color(22, 24, 29)); fill();
+        beginPath(); rect(0, 0, w, h); fillColor(Color(30, 24, 18)); fill();
 
         // Title, just to the right of the brand logo (fTitleX set in layout()).
         if (fHasFont)
