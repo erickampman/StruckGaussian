@@ -13,7 +13,7 @@ namespace strucksynth {
 
 enum ParamIndex {
    // --- Global ---
-   kParamVoiceMode = 0, // 0 = Mono (1 voice + glide), 1 = polyphonic
+   kParamVoiceMode = 0, // 0 = Mono (1 voice + glide), 1..3 = Poly 10 / 20 / 32
    kParamGlide,         // pitch glide — drives the Slew module's Rise and Fall together (mono)
    kParamLevel,         // master level → ModalBank Level
    kParamSpread,        // stereo distribution of modes → ModalBank Spread
@@ -59,7 +59,7 @@ struct ParamSpec {
 
 static constexpr ParamSpec kParams[kParamCount] = {
    // Global
-   {"Voices",     "voices",   "",    0.0f,   1.0f,   1.0f,  false, true },
+   {"Voices",     "voices",   "",    0.0f,   3.0f,   1.0f,  false, true },
    {"Glide",      "glide",    "s",   0.0001f, 2.0f,  0.01f, true,  false},
    {"Level",      "level",    "",    0.0f,   2.0f,   0.5f,  false, false},
    {"Spread",     "spread",   "",    0.0f,   1.0f,   0.3f,  false, false},
@@ -132,7 +132,7 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
 // CLAP params extension (CLAP_PARAM_IS_ENUM + value/text conversion) and the UI dropdowns both read
 // it from here, so a label can never drift between the host's generic panel and our own.
 
-static constexpr const char* kVoiceModeChoices[]   = { "Mono", "Poly",      nullptr };
+static constexpr const char* kVoiceModeChoices[]   = { "Mono", "Poly 10", "Poly 20", "Poly 32", nullptr };
 static constexpr const char* kStrikeTypeChoices[]  = { "Mallet", "Noise",   nullptr };
 static constexpr const char* kContactModeChoices[] = { "Note-Rel", "Wall-Clk", nullptr };
 static constexpr const char* kMpeChoices[]         = { "Off", "On",         nullptr };

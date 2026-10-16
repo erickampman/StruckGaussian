@@ -21,7 +21,7 @@ note-off.
   note-on with velocity 0 is a note-on, as the spec says; Vel>Level decides how loud it is.
 - **ModalBank** (resonator): up to 64 modes, material presets, stretch, decay (T60), damping
   tilt + bell, strike position, brightness, stereo spread.
-- **Voices**: Poly (10 voices) or Mono (legato, with glide).
+- **Voices**: Poly 10, Poly 20, Poly 32, or Mono (legato, with glide).
 - **Presets**: factory presets in `Presets/*.json`, baked into the plugin at build time.
 
 MIDI notes are sample-accurate: `process()` splits rendering at each event's frame offset.
