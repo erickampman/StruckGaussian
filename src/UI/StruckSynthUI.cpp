@@ -19,9 +19,10 @@
 
 #include "DistrhoPluginInfo.h"
 #include "Dropdown.hpp"
-#include "EmbeddedResources.hpp" // build-time codegen: Unlikelyware logo PNG bytes
+#include "EmbeddedResources.hpp" // build-time codegen: logo PNG and help page bytes
 #include "GeneratedPresets.h"     // build-time codegen from Presets/*.json (see tools/gen_presets.py)
 #include "GroupBox.hpp"
+#include "HelpButton.hpp"
 #include "Knob.hpp"
 #include "Logo.hpp"
 #include "PopupMenu.hpp"
@@ -43,6 +44,7 @@ using namespace strucksynth;  // params (kParams, ParamIndex, kMaterialNames)
 using DGL_NAMESPACE::Color;
 using DGL_NAMESPACE::Dropdown;
 using DGL_NAMESPACE::GroupBox;
+using DGL_NAMESPACE::HelpButton;
 using DGL_NAMESPACE::Knob;
 using DGL_NAMESPACE::Logo;
 using DGL_NAMESPACE::PopupMenu;
@@ -259,6 +261,14 @@ public:
         fPresetDropdown->setPlaceholder("--");
         fPresetDropdown->setIndex(-1); // no preset selected until the user picks one
 
+        // help.html shows the logo as "Unlikelyware.png", so it is written out under that name.
+        fHelpButton = std::make_unique<HelpButton>(this, std::vector<HelpButton::File>{
+            { "StruckSynth-help.html", EmbeddedResources::helpData, EmbeddedResources::helpDataSize },
+            { "Unlikelyware.png", EmbeddedResources::Unlikelyware_Final_ColorData,
+                                  EmbeddedResources::Unlikelyware_Final_ColorDataSize },
+        });
+        fHelpButton->setLabel("Help");
+
         fMenu = std::make_unique<PopupMenu>(this, this); // created last → draws on top
 
         pushSpectrum();
@@ -417,6 +427,12 @@ private:
         fPresetDropdown->setSize(static_cast<uint>(presetW), static_cast<uint>(presetH));
         fPresetDropdown->setAbsolutePos(W - M - presetW, static_cast<int>(4 * s));
 
+        // Help, just left of the Preset menu, captioned and boxed the same way.
+        const int helpW = static_cast<int>(44 * s);
+        fHelpButton->setUiScale(s);
+        fHelpButton->setSize(static_cast<uint>(helpW), static_cast<uint>(presetH));
+        fHelpButton->setAbsolutePos(W - M - presetW - helpW, static_cast<int>(4 * s));
+
         // 3 rows under the header. Within a row the width is split by the cells each panel needs (its
         // control count), so controls get similar widths everywhere instead of a 2-control panel taking
         // half the window. Top: spectrum | Strike. Middle: Object | Decay. Bottom: Global | Timbre |
@@ -571,6 +587,7 @@ private:
     std::unique_ptr<PopupMenu>     fMenu;
     std::unique_ptr<Logo>          fLogo;
     std::unique_ptr<Dropdown>      fPresetDropdown;
+    std::unique_ptr<HelpButton>    fHelpButton;
     const clap_plugin_t*           fPlugin = nullptr;   // the raw CLAP plugin (see plugin_gui.h)
     float                          fValues[kParamCount];
     bool                           fHasFont = false;

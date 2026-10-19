@@ -77,11 +77,18 @@ add_custom_target(generate_presets DEPENDS "${STRUCKSYNTH_GENERATED_PRESETS_H}")
 # on the resource file once built — same reasoning as the preset codegen above.
 set(STRUCKSYNTH_RESOURCES_HPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.hpp")
 set(STRUCKSYNTH_RESOURCES_CPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.cpp")
+# res2c.py embeds a whole folder and names each symbol by the file's stem, so help.md (the source of
+# help.html) would collide with help.html. Copy everything but *.md into a staging folder first.
 file(GLOB STRUCKSYNTH_RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Resources/*")
+list(FILTER STRUCKSYNTH_RESOURCE_FILES EXCLUDE REGEX "\\.md$")
+set(STRUCKSYNTH_RESOURCES_STAGING "${CMAKE_BINARY_DIR}/generated/Resources")
 add_custom_command(
     OUTPUT "${STRUCKSYNTH_RESOURCES_HPP}" "${STRUCKSYNTH_RESOURCES_CPP}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${STRUCKSYNTH_RESOURCES_STAGING}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${STRUCKSYNTH_RESOURCES_STAGING}"
+    COMMAND ${CMAKE_COMMAND} -E copy ${STRUCKSYNTH_RESOURCE_FILES} "${STRUCKSYNTH_RESOURCES_STAGING}"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/dpf/utils/res2c.py"
-            EmbeddedResources "${CMAKE_SOURCE_DIR}/Resources" "${CMAKE_BINARY_DIR}/generated"
+            EmbeddedResources "${STRUCKSYNTH_RESOURCES_STAGING}" "${CMAKE_BINARY_DIR}/generated"
     DEPENDS ${STRUCKSYNTH_RESOURCE_FILES} "${CMAKE_SOURCE_DIR}/dpf/utils/res2c.py"
     COMMENT "Embedding Resources/* as compiled-in data")
 add_custom_target(generate_resources DEPENDS "${STRUCKSYNTH_RESOURCES_HPP}" "${STRUCKSYNTH_RESOURCES_CPP}")
@@ -104,7 +111,7 @@ target_compile_options(dgl-opengl PRIVATE -w)
 add_library(strucksynth_core STATIC
     src/plugin.cpp
     src/UI/StruckSynthUI.cpp
-    "${STRUCKSYNTH_RESOURCES_CPP}"              # generated: the logo bytes (see above)
+    "${STRUCKSYNTH_RESOURCES_CPP}"              # generated: logo, font and help page bytes (see above)
     "${DPF_ROOT_DIR}/distrho/src/DistrhoUI.cpp"
     "${DPF_ROOT_DIR}/distrho/src/DistrhoUtils.cpp")
 set_target_properties(strucksynth_core PROPERTIES
