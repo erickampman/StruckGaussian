@@ -22,5 +22,5 @@
 - [x] Linux CI (Ubuntu gcc + clang with -Werror)
 
 ## M3: Later
-- [ ] Pitch 7.25 as persistent per-key tuning table (currently applies to sounding note only)
+- [x] Pitch 7.25 as persistent per-key tuning table (CLAP tuning stays per-note)
 - [ ] Move onto the DPF fork (erickampman/DPF) with own DGL_NAMESPACE

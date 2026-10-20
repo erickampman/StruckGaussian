@@ -40,10 +40,11 @@
 //    both bends then offset, as M2-104 §4.2.14.2 specifies. Applied here as an offset from the note's
 //    own pitch (its note number, or its Pitch 7.9 attribute), so it too bypasses the glide.
 //    KeyboardEDO's glide mode sends it, and CLAP tuning note expressions arrive as it (clap_ump.h).
-//    The spec also makes it persistent state — a tuning table that later notes on that key inherit —
-//    which is NOT implemented: here it lasts for the sounding note only and resets on the next
-//    note-on and on per-note management Reset. CLAP tuning depends on that: it must not outlive its
-//    note, so a tuning table would need its own path.
+//    Here it lasts for the sounding note only and resets on the next note-on and on per-note
+//    management Reset. The spec's persistent side — a tuning table that later notes on that key
+//    inherit — lives upstream in VoiceManager::keyTuning, which hands a key's stored Pitch 7.25 to
+//    the voice on its note-on (UmpMessage::keyPitch). CLAP tuning stays out of that table: it must
+//    not outlive its note.
 //  - De-zippering. Bend arrives as discrete events; a step in pitch is audible, so a change of target
 //    ramps linearly over kRampSeconds. Every note-on snaps instead: the note must start at its bent
 //    pitch, and in StruckSynth even a mono legato note re-strikes the bank, so there is no sounding
@@ -270,10 +271,11 @@ void MIDIPitchBendConverter(const pm::UmpMessage& message, Module* module)
         st->group = group;
         st->channel = channel;
         st->perNoteBend = 0.0f;
-        st->perNoteTuning = 0.0f;
         st->released = false;
         st->notePitch = message.attributeType == pm::kAttrPitch7_9 ? float(message.attribute) / 512.0f
                                                                    : float(message.note);
+        st->perNoteTuning = message.hasKeyPitch ? float(double(message.keyPitch) / 33554432.0 - st->notePitch)
+                                                : 0.0f;
         st->snap = true;
         break;
     case pm::kStatusPitchBend:

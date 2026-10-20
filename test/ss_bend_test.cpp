@@ -347,7 +347,7 @@ void testPitch725() {
    const double bentG = estimateFrequency(render(vm, uint32_t(kSampleRate)));
    check(near(bentG, semitonesUp(c4, 8.25)), "a per-note bend offsets from the Pitch 7.25 pitch (" + hz(bentG) + ")");
 
-   // Lasts for the sounding note only: the next note-on on that key starts at its own pitch.
+   // Persistent per key: the next note-on on that key starts at the stored pitch.
    VoiceManager next(kSampleRate, kBlock);
    configure(next);
    setVM(next, MIDIParamItemVoiceCount, 1.0f);
@@ -356,8 +356,15 @@ void testPitch725() {
    render(next, 4096);
    next.handleMIDIMessage(noteOff(60));
    next.handleMIDIMessage(noteOn(60));
+   const double kept = estimateFrequency(render(next, uint32_t(kSampleRate)));
+   check(near(kept, semitonesUp(c4, 12.0)), "the next note-on on that key starts at its Pitch 7.25 (" + hz(kept) + ")");
+
+   // Per-Note Management Reset (KeyboardEDO sends one before each note-on) clears the key.
+   next.handleMIDIMessage(noteOff(60));
+   next.handleMIDIMessage(makeUmp(pm::kStatusPerNoteManagement, 0, 60, pm::kPerNoteMgmtReset, 0));
+   next.handleMIDIMessage(noteOn(60));
    const double fresh = estimateFrequency(render(next, uint32_t(kSampleRate)));
-   check(near(fresh, c4), "the next note-on starts untuned (" + hz(fresh) + ")");
+   check(near(fresh, c4), "after a Per-Note Management Reset the key starts untuned (" + hz(fresh) + ")");
 
    // Relative to a Pitch 7.9 note-on, Pitch 7.25 still lands on the absolute pitch it names.
    VoiceManager micro(kSampleRate, kBlock);
@@ -366,6 +373,62 @@ void testPitch725() {
    micro.handleMIDIMessage(pitch725(60, 64.0));
    const double e4 = estimateFrequency(render(micro, uint32_t(kSampleRate)));
    check(near(e4, semitonesUp(c4, 4.0)), "on a 7.9 note (60.5), Pitch 7.25 = 64 sounds E4 (" + hz(e4) + ")");
+}
+
+// Pitch 7.25 as a tuning table: sent with no note sounding, kept per key and channel, through reset().
+void testKeyTuning() {
+   std::printf("Pitch 7.25 per-key tuning table:\n");
+   const double c4 = pm::noteToFrequency(60);
+
+   VoiceManager vm(kSampleRate, kBlock);
+   configure(vm);
+   vm.handleMIDIMessage(pitch725(60, 63.5));   // before any note: no voice owns key 60 yet
+   vm.handleMIDIMessage(noteOn(60));
+   const double tuned = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+   check(near(tuned, semitonesUp(c4, 3.5)), "a Pitch 7.25 sent before the note-on tunes it (" + hz(tuned) + ")");
+
+   vm.handleMIDIMessage(noteOff(60));
+   vm.reset();
+   vm.handleMIDIMessage(noteOn(60));
+   const double afterReset = estimateFrequency(render(vm, uint32_t(kSampleRate)));
+   check(near(afterReset, semitonesUp(c4, 3.5)), "the table survives a reset (" + hz(afterReset) + ")");
+
+   VoiceManager chan(kSampleRate, kBlock);
+   configure(chan);
+   chan.handleMIDIMessage(pitch725(60, 67.0, 1));   // channel 2's key 60 only
+   chan.handleMIDIMessage(noteOn(60, 0));
+   const double ch1 = estimateFrequency(render(chan, uint32_t(kSampleRate)));
+   check(near(ch1, c4), "a channel-2 entry leaves channel 1's key alone (" + hz(ch1) + ")");
+
+   // A Pitch 7.9 attribute names the note's pitch, so it wins over the table.
+   VoiceManager micro(kSampleRate, kBlock);
+   configure(micro);
+   micro.handleMIDIMessage(pitch725(60, 67.0));
+   micro.handleMIDIMessage(makeUmp(pm::kStatusNoteOn, 0, 60, pm::kAttrPitch7_9, (0xC000u << 16) | (62u << 9)));
+   const double d4 = estimateFrequency(render(micro, uint32_t(kSampleRate)));
+   check(near(d4, semitonesUp(c4, 2.0)), "a Pitch 7.9 note-on ignores the table (" + hz(d4) + ")");
+
+   // CLAP tuning lasts for its note only.
+   VoiceManager clap(kSampleRate, kBlock);
+   configure(clap);
+   setVM(clap, MIDIParamItemVoiceCount, 1.0f);
+   clap.handleMIDIMessage(noteOn(60));
+   clap_event_note_expression_t ev{};
+   ev.header.size = sizeof(ev);
+   ev.header.type = CLAP_EVENT_NOTE_EXPRESSION;
+   ev.expression_id = CLAP_NOTE_EXPRESSION_TUNING;
+   ev.note_id = -1;
+   ev.port_index = 0;
+   ev.channel = 0;
+   ev.key = 60;
+   ev.value = 5.0;
+   clap.handleMIDIMessage(*pm::fromClapNoteExpression(ev, 60));
+   const double f4 = estimateFrequency(render(clap, uint32_t(kSampleRate)));
+   check(near(f4, semitonesUp(c4, 5.0)), "CLAP tuning +5 retunes the sounding note (" + hz(f4) + ")");
+   clap.handleMIDIMessage(noteOff(60));
+   clap.handleMIDIMessage(noteOn(60));
+   const double back = estimateFrequency(render(clap, uint32_t(kSampleRate)));
+   check(near(back, c4), "...and the next note-on on that key is untuned (" + hz(back) + ")");
 }
 
 // CLAP note ids: when both messages carry one, the id decides which note is meant.
@@ -930,6 +993,7 @@ int main() {
    testPerNoteBend();
    testPerNoteBendRange();
    testPitch725();
+   testKeyTuning();
    testNoteIds();
    testClapNoteExpressionConversion();
    testHoldsNote();

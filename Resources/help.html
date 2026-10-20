@@ -424,7 +424,7 @@ h1.card, h2.card, h3.card {
 <li><strong>Channel pitch bend</strong> (MIDI 1.0 or 2.0) is <strong>±2 semitones</strong> by default. Each note follows the bend of the channel it was played on, so with one note per channel it's per-note bend.</li>
 <li><strong>RPN 0</strong> (pitch bend sensitivity) sets a channel's range.</li>
 <li><strong>MIDI 2.0 per-note pitch bend</strong> bends only the note it names, over the same range as its channel's bend. A controller can give per-note bend a range of its own with MIDI 2.0 registered controller 7, as KeyboardEDO does.</li>
-<li><strong>Pitch 7.25</strong> (MIDI 2.0 per-note controller 3) sets an absolute pitch for the sounding note, and the bends offset from it. It lasts for that note only.</li>
+<li><strong>Pitch 7.25</strong> (MIDI 2.0 per-note controller 3) sets an absolute pitch for a key, and the bends offset from it. It retunes the sounding note and stays with the key: later notes on that key start at it, unless the note-on carries its own Pitch 7.9 pitch. Per-Note Management Reset clears it.</li>
 <li>Bends come after <strong>Glide</strong>, so glide never smears a bend, and they bend a ringing tail smoothly rather than re-striking it. Bend changes are smoothed over 2 ms, and a note starts at its bent pitch.</li>
 <li>Per-note bend resets on each note-on. One sent before its note-on is ignored.</li>
 </ul>
@@ -454,7 +454,7 @@ h1.card, h2.card, h3.card {
 <div class="disclosure-content">
 <p>Hosts such as Bitwig send per-note expression as CLAP note expressions:</p>
 <ul>
-<li><strong>Tuning</strong> becomes an exact per-note pitch (as Pitch 7.25), so any amount of tuning is exact rather than limited to the bend range.</li>
+<li><strong>Tuning</strong> becomes an exact per-note pitch (as Pitch 7.25), so any amount of tuning is exact rather than limited to the bend range. It lasts for its note only.</li>
 <li><strong>Pressure</strong> and <strong>Brightness</strong> drive the <a href="#expression">Expression</a> knobs' pressure and timbre.</li>
 <li>Volume, Pan, Vibrato and Expression (the CLAP expression of that name) are ignored.</li>
 </ul>

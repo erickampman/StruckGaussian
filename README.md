@@ -110,14 +110,18 @@ tags notes with CLAP note ids, the ids decide instead, so a re-struck key is a n
 
 **Pitch 7.25** (MIDI 2.0 registered per-note controller #3) sets an absolute pitch for the sounding
 note, and both bends offset from it. Like the bends it bypasses the glide. KeyboardEDO's glide mode
-sends it. The spec also makes it persistent, a tuning table that later notes on the same key
-inherit; that is not implemented: it lasts for the sounding note and resets on the next note-on.
+sends it. As the spec makes it, it is also persistent: a tuning table, kept per key, channel and
+group, that later notes on the same key inherit, whether or not a note was sounding when it arrived.
+A note-on with a Pitch 7.9 attribute names its own pitch and ignores the table; Per-Note Management
+with Reset (which KeyboardEDO sends before each note-on) clears the key. The table survives a host's
+reset but is not saved with the plugin state: the controller sends it.
 
 **CLAP note expressions** (`CLAP_EVENT_NOTE_EXPRESSION`, how Bitwig sends per-note expression) are
 converted to MIDI 2.0 per-note messages:
 
 - **Tuning** becomes Pitch 7.25 at key + tuning, so it is exact at any size within Pitch 7.25's
-  0–128 semitone span rather than clamped to the ±2 bend range.
+  0–128 semitone span rather than clamped to the ±2 bend range. It lasts for its note only and
+  never enters the tuning table.
 - **Pressure** becomes poly pressure and **Brightness** registered per-note controller #74, which
   drive the Expression knobs' pressure and timbre.
 - Volume, Pan, Vibrato and Expression (the CLAP expression of that name, not the panel) are ignored.

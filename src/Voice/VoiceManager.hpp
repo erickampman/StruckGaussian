@@ -119,6 +119,20 @@ private:
     ConnectionCommandQueue<1024> commandQueue;
     void drainCommandQueue();
 
+    // Pitch 7.25 as persistent per-key tuning (M2-104 §4.2.14.2): the last Pitch 7.25 sent for a
+    // key, per group and channel, whether or not a note was sounding. A later note-on on that key
+    // without a Pitch 7.9 attribute carries it (UmpMessage::keyPitch) and starts there. Per-Note
+    // Management Reset clears the key. It is configuration a controller sent, like the bend ranges,
+    // so reset() keeps it; the plugin state does not save it. CLAP tuning (UmpMessage::soundingOnly)
+    // never writes it.
+    struct KeyTuning { uint32_t pitch = 0; bool set = false; };   // pitch: Q7.25 semitones
+    static constexpr size_t kTuningKeys = 16 * 16 * 128;
+    std::vector<KeyTuning> keyTuning = std::vector<KeyTuning>(kTuningKeys);
+    KeyTuning& keyTuningFor(const pm::UmpMessage& msg) {
+        return keyTuning[((msg.group & 0x0Fu) * 16u + (msg.channel & 0x0Fu)) * 128u + (msg.note & 0x7Fu)];
+    }
+    pm::UmpMessage withKeyTuning(const pm::UmpMessage& noteOn);
+
 	Voice* findFreeVoice();
 	Voice* stealVoice(const pm::UmpMessage& msg);
 	Voice* findVoiceForMessage(const pm::UmpMessage& msg);

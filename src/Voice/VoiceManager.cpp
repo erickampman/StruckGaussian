@@ -127,7 +127,7 @@ void VoiceManager::handleMIDIMessage(const pm::UmpMessage& message) {
 	if (message.messageType == pm::kUmpTypeChannelVoice2) {
 		switch (message.status) {
 		case pm::kStatusNoteOn:
-			noteOn(message);
+			noteOn(withKeyTuning(message));
             return;
         case pm::kStatusNoteOff:
             noteOff(message);
@@ -143,6 +143,13 @@ void VoiceManager::handleMIDIMessage(const pm::UmpMessage& message) {
             if (message.ccIndex == 123) { allNotesOffOnChannel(message.group, message.channel); return; }
             if (message.ccIndex == 120) { allSoundOffOnChannel(message.group, message.channel); return; }
             break;
+        case pm::kStatusRegPerNoteController:   // and on to the sounding note, if there is one
+            if (message.ccIndex == pm::kRegPerNotePitch7_25 && !message.soundingOnly)
+                keyTuningFor(message) = { message.ccData, true };
+            break;
+        case pm::kStatusPerNoteManagement:
+            if (message.optionFlags & pm::kPerNoteMgmtReset) keyTuningFor(message).set = false;
+            break;
 		default:
 			break;
 		}
@@ -153,6 +160,20 @@ void VoiceManager::handleMIDIMessage(const pm::UmpMessage& message) {
 			voice->handleMIDIMessage(message);
 		}
 	}
+}
+
+// The note-on, carrying its key's stored Pitch 7.25 if there is one. On the note-on itself rather
+// than as a following message, so it reaches the modules whenever the note does: a steal holds the
+// note-on back until the old note has ducked out, and drops per-note messages meanwhile. A Pitch 7.9
+// attribute names the note's pitch explicitly, so it wins over the table.
+pm::UmpMessage VoiceManager::withKeyTuning(const pm::UmpMessage& noteOn) {
+    pm::UmpMessage m = noteOn;
+    const KeyTuning& tuning = keyTuningFor(noteOn);
+    if (tuning.set && noteOn.attributeType != pm::kAttrPitch7_9) {
+        m.hasKeyPitch = true;
+        m.keyPitch = tuning.pitch;
+    }
+    return m;
 }
 
 bool VoiceManager::freeRunning() {

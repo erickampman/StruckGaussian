@@ -33,7 +33,8 @@ inline UmpMessage fromClapNote(const clap_event_note_t& ev, bool on) {
 //   TUNING     → registered per-note controller #3, Pitch 7.25, at key + tuning. An absolute pitch
 //                rather than a per-note bend, so it is exact at any size instead of being clamped to
 //                the bend range (CLAP allows ±120 semitones; the per-note bend range defaults to ±2).
-//                Limited only by Pitch 7.25's own 0..128 semitone span.
+//                Limited only by Pitch 7.25's own 0..128 semitone span. Marked soundingOnly: a CLAP
+//                expression ends with its note, so it stays out of the per-key tuning table.
 //   PRESSURE   → polyphonic key pressure
 //   BRIGHTNESS → registered per-note controller #74
 // `key` is the event's key, or — for an expression that names only a note id — the key of the note
@@ -63,6 +64,7 @@ inline std::optional<UmpMessage> fromClapNoteExpression(const clap_event_note_ex
       m.status  = kStatusRegPerNoteController;
       m.ccIndex = kRegPerNotePitch7_25;
       m.ccData  = word >= 4294967295.0 ? 0xFFFFFFFFu : static_cast<uint32_t>(word);
+      m.soundingOnly = true;   // CLAP tuning belongs to its note; it must not retune the key
       return m;
    }
    case CLAP_NOTE_EXPRESSION_PRESSURE:

@@ -186,7 +186,7 @@ What a controller's **pressure** and **timbre** do to a note. Each knob is 0 by 
 - **Channel pitch bend** (MIDI 1.0 or 2.0) is **±2 semitones** by default. Each note follows the bend of the channel it was played on, so with one note per channel it's per-note bend.
 - **RPN 0** (pitch bend sensitivity) sets a channel's range.
 - **MIDI 2.0 per-note pitch bend** bends only the note it names, over the same range as its channel's bend. A controller can give per-note bend a range of its own with MIDI 2.0 registered controller 7, as KeyboardEDO does.
-- **Pitch 7.25** (MIDI 2.0 per-note controller 3) sets an absolute pitch for the sounding note, and the bends offset from it. It lasts for that note only.
+- **Pitch 7.25** (MIDI 2.0 per-note controller 3) sets an absolute pitch for a key, and the bends offset from it. It retunes the sounding note and stays with the key: later notes on that key start at it, unless the note-on carries its own Pitch 7.9 pitch. Per-Note Management Reset clears it.
 - Bends come after **Glide**, so glide never smears a bend, and they bend a ringing tail smoothly rather than re-striking it. Bend changes are smoothed over 2 ms, and a note starts at its bent pitch.
 - Per-note bend resets on each note-on. One sent before its note-on is ignored.
 ~~~
@@ -204,7 +204,7 @@ With MPE off, an ordinary pitch wheel still bends released notes. MIDI 2.0 per-n
 ~~~
 ~~~disclosure CLAP note expressions and note end [disclosure-title subtle]
 Hosts such as Bitwig send per-note expression as CLAP note expressions:
-- **Tuning** becomes an exact per-note pitch (as Pitch 7.25), so any amount of tuning is exact rather than limited to the bend range.
+- **Tuning** becomes an exact per-note pitch (as Pitch 7.25), so any amount of tuning is exact rather than limited to the bend range. It lasts for its note only.
 - **Pressure** and **Brightness** drive the [Expression](#expression) knobs' pressure and timbre.
 - Volume, Pan, Vibrato and Expression (the CLAP expression of that name) are ignored.
 
