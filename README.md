@@ -133,8 +133,9 @@ An expression may name only a note id: tuning then looks up that note's key.
 down to silence, is stolen, or (mono) the note leaves the held stack. Hosts such as Bitwig keep a
 note's per-voice modulation and expressions running until then. Notes that arrive as MIDI events get
 no note end, since a CLAP note end answers a CLAP note-on. The voice-info extension reports the voice
-count (10, or 1 in Mono) and that notes may overlap on the same key, since note ids keep them apart. VST3 note expression
-(PlainOldSynth's clap-wrapper extension) does not apply: StruckSynth has no VST3 build.
+count (10, or 1 in Mono) and that notes may overlap on the same key, since note ids keep them apart. In the VST3 build,
+clap-wrapper turns VST3 note expressions into CLAP ones, and offers hosts Tuning and Brightness as
+well as Pressure.
 
 The [DISTRHO Plugin Framework (DPF)](https://github.com/DISTRHO/DPF) is used **only as the GUI
 layer** (UIExporter + NanoVG + pugl). The CLAP entry point is hand-written in `src/plugin.cpp`,
@@ -203,6 +204,7 @@ tools/fetch_deps.sh                            # pinned submodules + patches/
 cmake -B build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure     # see TESTING.md for the full suite
+cmake --build build --target install-clap install-vst3   # also install-auv2 on macOS
 ```
 
 `tools/fetch_deps.sh` initialises only the four VST3 SDK submodules the build needs (a plain
