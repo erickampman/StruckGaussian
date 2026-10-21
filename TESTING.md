@@ -21,10 +21,17 @@ validator. Everything runs headless on Linux/macOS — no DAW or audio device re
 ## Build and run all tests
 
 ```sh
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+tools/fetch_deps.sh
+cmake -B build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ctest --test-dir build --output-on-failure
+clap-validator validate build/StruckSynth.clap
+ninja -C build install-auv2 && auval -v aumu StSy nLKL      # macOS: AU VALIDATION SUCCEEDED
 ```
+
+Steinberg's VST3 validator builds from `external/vst3sdk` (`ninja validator` in a separate build of
+that folder with `-DSMTG_ENABLE_VSTGUI_SUPPORT=OFF`); its CMake rejects an Xcode path with spaces, so
+point `DEVELOPER_DIR` at a symlink without them. Then `validator build/StruckSynth.vst3`.
 
 Add `-DSTRUCKSYNTH_WERROR=ON` at configure time to treat warnings as errors for the framework
 and the `pm-selftest` glue (this is what CI keys on). The tests that pull in vendored

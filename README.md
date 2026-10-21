@@ -176,6 +176,9 @@ Resources/            font + logo, embedded into the binary at build time
 test/                 in-process self-tests (see TESTING.md)
 dpf/                  DISTRHO Plugin Framework (submodule, + nested pugl) — the GUI layer only
 external/clap         CLAP headers (submodule, pinned 1.2.9) — the plugin and the tests
+external/clap-wrapper free-audio's clap-wrapper (submodule, v0.16.0) — the VST3 and AUv2 builds
+external/vst3sdk      Steinberg VST3 SDK (submodule; only base, cmake, pluginterfaces, public.sdk)
+patches/              local patches to the submodules, applied by tools/apply_dep_patches.sh
 ```
 
 Vendored PolygraphModular files keep their original `#include "X.hpp"` form; every framework
@@ -194,11 +197,18 @@ sudo apt install pkg-config libgl1-mesa-dev libx11-dev libxext-dev libxrandr-dev
 Then:
 
 ```sh
-git clone --recurse-submodules https://github.com/erickampman/StruckSynth.git
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+git clone https://github.com/erickampman/StruckSynth.git
+cd StruckSynth
+tools/fetch_deps.sh                            # pinned submodules + patches/
+cmake -B build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ctest --test-dir build --output-on-failure     # see TESTING.md for the full suite
 ```
+
+`tools/fetch_deps.sh` initialises only the four VST3 SDK submodules the build needs (a plain
+`--recurse-submodules` also pulls its docs, tutorials and VSTGUI) and applies the clap-wrapper
+patch that makes the AUv2 editor draw. On Linux the VST3 SDK also wants `libxinerama-dev
+libxcb1-dev libx11-xcb-dev libxcb-util-dev libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev`.
 
 Produces `build/StruckSynth.clap` (a bundle on macOS). `cmake --build build --target install-clap`
 symlinks it into `~/.clap` (Linux) or `~/Library/Audio/Plug-Ins/CLAP/` (macOS), so any CLAP host
@@ -206,7 +216,16 @@ picks up the freshest build after a rescan. Validate with
 [`clap-validator`](https://github.com/free-audio/clap-validator). Test details in
 [TESTING.md](TESTING.md).
 
-Configure options: `-DSTRUCKSYNTH_WERROR=ON` (warnings as errors), `-DSTRUCKSYNTH_PRESET_DUMP=ON`
+The same build also makes `build/StruckSynth.vst3` and, on macOS, `build/StruckSynth.component`
+(AUv2: type `aumu`, subtype `StSy`, manufacturer `nLKL`), both through clap-wrapper around the same
+plugin. On Linux the VST3 bundle is `build/Release/StruckSynth.vst3`. `install-vst3` symlinks it into
+`~/.vst3` or `~/Library/Audio/Plug-Ins/VST3/`; `install-auv2` copies the component into
+`~/Library/Audio/Plug-Ins/Components/` (AU hosts don't reliably follow symlinks). Check the AU with
+`auval -v aumu StSy nLKL`; if it says it can't find the component, `killall -9
+AudioComponentRegistrar` and try again.
+
+Configure options: `-DSTRUCKSYNTH_BUILD_VST3=OFF`, `-DSTRUCKSYNTH_BUILD_AUV2=OFF` (on by default on
+macOS only), `-DSTRUCKSYNTH_WERROR=ON` (warnings as errors), `-DSTRUCKSYNTH_PRESET_DUMP=ON`
 (dev-only DUMP button that writes the current patch as JSON to `$HOME`).
 
 ## License

@@ -51,6 +51,15 @@ Known follow-up: `state_load` (in `src/plugin.cpp`) calls `applyAllParams` on th
 can rewire the voice graph under a running `process()`. IFSynth (`9cab332`) only stores the values
 there and lets the next block apply them; port that.
 
+## VST3 and AUv2 (2026-10-21)
+
+Both come from clap-wrapper (`external/clap-wrapper`, v0.16.0) wrapping the same CLAP, following
+`~/Dev-Tools/lockstep-git/SYNTH_WRAPPERS.md` and PlainOldSynth. AUv2 is `aumu StSy nLKL`.
+`patches/clap-wrapper--auv2-gui-show.patch` makes the AUv2 view call `gui->show()`, which starts the
+render timer; without it the AU editor stays blank. `kAsVst3Ext` in `src/plugin.cpp` offers VST3 hosts
+Tuning and Brightness note expressions. Before each commit, also `auval -v aumu StSy nLKL` after
+`ninja -C build install-auv2`.
+
 ## On Linux
 
 The Mac is where this was developed; on Linux only CI has built it. Its ubuntu/gcc job failed from the
@@ -60,7 +69,8 @@ headless; so the plugin loads and sounds right on Linux, but nobody has seen its
 
 A checkout from before 2026-10-11 is far behind. To catch up:
 
-1. `git pull` and `git submodule update --init --recursive`.
+1. `git pull` and `tools/fetch_deps.sh` (pinned submodules, only four of the VST3 SDK's, and the
+   clap-wrapper patch in `patches/`).
 2. **Configure a fresh build directory** (`rm -rf build`): the move off `dpf_add_plugin` renamed the
    targets and moved the output to `build/StruckSynth.clap`. Then
    `cmake --build build --target install-clap` re-points `~/.clap/StruckSynth.clap` at it (it is a
@@ -68,6 +78,7 @@ A checkout from before 2026-10-11 is far behind. To catch up:
 3. Packages: README's Build section (X11 and GL development headers). If configure or link asks for
    more, PlainOldSynth's README lists the full set its Linux CI installs.
 4. `ctest --test-dir build --output-on-failure`, then `clap-validator validate build/StruckSynth.clap`.
+5. The VST3 is `build/Release/StruckSynth.vst3` on Linux; `install-vst3` links it into `~/.vst3`.
 
 Never checked on Linux, so check these by hand and record what you find in this file:
 - The editor under X11 through the raw CLAP gui extension (`CLAP_WINDOW_API_X11` in

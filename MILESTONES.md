@@ -21,6 +21,16 @@
 - [x] All Notes Off (CC 123) and All Sound Off (CC 120), per channel
 - [x] Linux CI (Ubuntu gcc + clang with -Werror)
 
-## M3: Later
+## M3: VST3 / AUv2 via clap-wrapper
+- [x] VST3 (macOS + Linux) and AUv2 (macOS, `aumu StSy nLKL`) through clap-wrapper v0.16.0, wrapping the same CLAP
+- [x] VST3 note expressions: Tuning + Brightness offered via `CLAP_PLUGIN_AS_VST3` (Pressure as before)
+- [x] clap-wrapper AUv2 GUI patch carried in `patches/` (calls `gui->show()`, which starts the render timer)
+- [x] Validated on macOS (Xcode 26.3, Ninja, 2026-10-21): ctest 12/12; clap-validator 35 pass, 0 fail;
+      auval passes; Steinberg's VST3 validator 47 pass, 0 fail (lists Tuning + Brightness)
+- [ ] By hand: GUI, notes, automation and state recall in Logic (AUv2), REAPER (VST3 + AUv2), Bitwig (VST3);
+      Bitwig per-note Tuning in the VST3
+- [ ] Linux: VST3 build in CI; not yet loaded in a Linux host
+
+## M4: Later
 - [x] Pitch 7.25 as persistent per-key tuning table (CLAP tuning stays per-note)
 - [ ] Move onto the DPF fork (erickampman/DPF) with own DGL_NAMESPACE

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.21)   # clap-wrapper needs 3.21
 
 # C is needed for DPF's pugl / dgl sources.
 project(StruckSynth VERSION 0.3.0 LANGUAGES C CXX)
@@ -13,6 +13,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(STRUCKSYNTH_WERROR "Treat warnings as errors (framework + tests)" OFF)
 option(STRUCKSYNTH_PRESET_DUMP "Dev-only: press 'P' in the UI to dump the patch as JSON to \$HOME" OFF)
+option(STRUCKSYNTH_BUILD_VST3 "Build a VST3 wrapper around the same plugin via clap-wrapper." ON)
+option(STRUCKSYNTH_BUILD_AUV2 "Build an AUv2 (.component) wrapper via clap-wrapper (macOS only)." ${APPLE})
+
+if(APPLE)
+    # DPF's DistrhoUI_macOS.mm and clap-wrapper's AUv2 sources are Objective-C++.
+    enable_language(OBJCXX)
+endif()
 
 # --- PM framework port -----------------------------------------------------
 # Vendored PolygraphModular framework + our shim/MIDI layer, as a static lib. Compiled with
@@ -126,6 +133,9 @@ target_include_directories(strucksynth_core PUBLIC
     external/clap/include             # <clap/clap.h> (the raw entry point)
     "${CMAKE_BINARY_DIR}/generated"   # GeneratedPresets.h + EmbeddedResources.hpp
     "${DPF_ROOT_DIR}/distrho")        # DistrhoUI.hpp / DistrhoUIInternal.hpp
+# clap-wrapper's plugin-side extension header only (clapwrapper/vst3.h: which VST3 note expressions to
+# offer). Header-only and plain C, so the CLAP build needs it even with STRUCKSYNTH_BUILD_VST3 off.
+target_include_directories(strucksynth_core PRIVATE "${CMAKE_SOURCE_DIR}/external/clap-wrapper/include")
 target_compile_definitions(strucksynth_core PUBLIC
     DISTRHO_PLUGIN_TARGET_CLAP
     DISTRHO_IS_STANDALONE=0
@@ -160,7 +170,7 @@ endfunction()
 
 set(STRUCKSYNTH_EMPTY_SOURCE "${CMAKE_BINARY_DIR}/generated/strucksynth_empty.c")
 # A genuinely empty file trips -Wempty-translation-unit under -Wpedantic -Werror, and ISO C requires
-# at least one declaration anyway.
+# at least one declaration anyway (clap-wrapper applies -Wpedantic -Werror to the AUv2 target).
 set(_strucksynth_empty_content "typedef int strucksynth_empty_translation_unit_marker;\n")
 set(_strucksynth_empty_existing "")
 if(EXISTS "${STRUCKSYNTH_EMPTY_SOURCE}")
@@ -206,6 +216,101 @@ add_custom_target(install-clap
     DEPENDS StruckSynth
     VERBATIM
     COMMENT "Symlinking StruckSynth.clap into ${STRUCKSYNTH_CLAP_DIR}")
+
+# --- VST3 / AUv2 via the vendored clap-wrapper, wrapping the very same CLAP ------------------
+# Purely additive: neither block touches the .clap target above. As PlainOldSynth.
+if(STRUCKSYNTH_BUILD_VST3 OR STRUCKSYNTH_BUILD_AUV2)
+    if(NOT CLAP_SDK_ROOT)
+        set(CLAP_SDK_ROOT "${CMAKE_SOURCE_DIR}/external/clap" CACHE PATH "" FORCE)
+    endif()
+    add_subdirectory(external/clap-wrapper)
+endif()
+
+if(STRUCKSYNTH_BUILD_VST3)
+    if(NOT VST3_SDK_ROOT)
+        set(VST3_SDK_ROOT "${CMAKE_SOURCE_DIR}/external/vst3sdk" CACHE PATH "" FORCE)
+    endif()
+
+    add_library(StruckSynth_vst3 MODULE "${STRUCKSYNTH_EMPTY_SOURCE}")
+    if(UNIX AND NOT APPLE)
+        # clap-wrapper's Linux branch tests a misspelled TCLP_RESOURCE_DIRECTORY, which is never
+        # set, so it always warns that RESOURCE_DIRECTORY is unsupported. Defining it empty
+        # silences that; we pass no RESOURCE_DIRECTORY.
+        set(TCLP_RESOURCE_DIRECTORY "")
+    endif()
+    target_link_libraries(StruckSynth_vst3 PRIVATE strucksynth_core)
+    strucksynth_force_load_whole_archive(StruckSynth_vst3 strucksynth_core)
+    target_add_vst3_wrapper(
+        TARGET StruckSynth_vst3
+        OUTPUT_NAME "StruckSynth"
+        BUNDLE_IDENTIFIER "com.unlikelyware.strucksynth.vst3"
+        BUNDLE_VERSION "${PROJECT_VERSION}")
+    if(TARGET base-sdk-vst3 AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # The VST3 SDK still uses std::wstring_convert, deprecated since C++17.
+        target_compile_options(base-sdk-vst3 PRIVATE -Wno-deprecated-declarations)
+    endif()
+
+    # Hosts want the bundle folder. On Linux $<TARGET_FILE> is the .so inside it; clap-wrapper
+    # builds the bundle in build/Release (or build/Debug). As Retune 9a2b6eb.
+    if(APPLE)
+        set(STRUCKSYNTH_VST3_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
+        set(STRUCKSYNTH_VST3_ARTIFACT "$<TARGET_BUNDLE_DIR:StruckSynth_vst3>")
+    else()
+        set(STRUCKSYNTH_VST3_DIR "$ENV{HOME}/.vst3")
+        set(STRUCKSYNTH_VST3_ARTIFACT
+            "${CMAKE_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/StruckSynth.vst3")
+    endif()
+    add_custom_target(install-vst3
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${STRUCKSYNTH_VST3_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${STRUCKSYNTH_VST3_DIR}/StruckSynth.vst3"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "${STRUCKSYNTH_VST3_ARTIFACT}"
+            "${STRUCKSYNTH_VST3_DIR}/StruckSynth.vst3"
+        DEPENDS StruckSynth_vst3
+        VERBATIM
+        COMMENT "Symlinking StruckSynth.vst3 into ${STRUCKSYNTH_VST3_DIR}")
+endif()
+
+if(STRUCKSYNTH_BUILD_AUV2)
+    # AUv2 is an Apple-only format, and clap-wrapper's target_add_auv2_wrapper does not exist off
+    # Apple platforms. Say so plainly instead of failing with an unknown-command error.
+    if(NOT APPLE)
+        message(FATAL_ERROR
+            "STRUCKSYNTH_BUILD_AUV2 is macOS-only (AUv2 is an Apple plugin format). "
+            "Reconfigure with -DSTRUCKSYNTH_BUILD_AUV2=OFF.")
+    endif()
+    # clap-wrapper fetches Apple's AudioUnitSDK itself (CPM) unless pointed at a local copy with
+    # -DAUDIOUNIT_SDK_ROOT=...
+    if(NOT AUDIOUNIT_SDK_ROOT)
+        set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES ON)
+    endif()
+
+    add_library(StruckSynth_auv2 MODULE "${STRUCKSYNTH_EMPTY_SOURCE}")
+    target_link_libraries(StruckSynth_auv2 PRIVATE strucksynth_core)
+    strucksynth_force_load_whole_archive(StruckSynth_auv2 strucksynth_core)
+    # "StSy" (StruckSynth) as the subtype, under Unlikelyware's own "nLKL" manufacturer code.
+    target_add_auv2_wrapper(
+        TARGET StruckSynth_auv2
+        OUTPUT_NAME "StruckSynth"
+        BUNDLE_IDENTIFIER "com.unlikelyware.strucksynth.auv2"
+        BUNDLE_VERSION "${PROJECT_VERSION}"
+        MANUFACTURER_NAME "Unlikelyware"
+        MANUFACTURER_CODE "nLKL"
+        SUBTYPE_CODE "StSy"
+        INSTRUMENT_TYPE "aumu")
+
+    # A copy, not a symlink: AU hosts don't reliably find symlinked components.
+    set(STRUCKSYNTH_AUV2_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/Components")
+    add_custom_target(install-auv2
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${STRUCKSYNTH_AUV2_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${STRUCKSYNTH_AUV2_DIR}/StruckSynth.component"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "$<TARGET_BUNDLE_DIR:StruckSynth_auv2>"
+            "${STRUCKSYNTH_AUV2_DIR}/StruckSynth.component"
+        DEPENDS StruckSynth_auv2
+        VERBATIM
+        COMMENT "Copying StruckSynth.component into ${STRUCKSYNTH_AUV2_DIR}")
+endif()
 
 # --- self-tests (the framework; headless, no DAW) --------------------------
 add_executable(pm-selftest test/pm_selftest.cpp)
