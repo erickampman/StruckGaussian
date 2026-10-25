@@ -109,14 +109,27 @@ built yourself has no quarantine flag, so macOS loads it without the steps a dow
 
 ## Options
 
-- `-DSTRUCKSYNTH_BUILD_VST3=OFF`: skip the VST3.
-- `-DSTRUCKSYNTH_BUILD_AUV2=OFF`: skip the AUv2 (on by default on macOS only).
-- `-DSTRUCKSYNTH_WERROR=ON`: warnings as errors.
-- `-DSTRUCKSYNTH_PRESET_DUMP=ON`: a dev-only DUMP button that writes the current patch as JSON to
-  `$HOME`.
+Pass these to the first command (`cmake -B build ... -DNAME=VALUE`).
+
+| Option | Default | Effect |
+|---|---|---|
+| `STRUCKSYNTH_BUILD_VST3` | `ON` | Build `StruckSynth.vst3` through clap-wrapper (with the vendored `external/vst3sdk`). |
+| `STRUCKSYNTH_BUILD_AUV2` | `ON` on macOS, `OFF` elsewhere | Build `StruckSynth.component` through clap-wrapper. **macOS only**. The first configure downloads Apple's AudioUnitSDK; `-DAUDIOUNIT_SDK_ROOT=...` uses a local copy. |
+| `STRUCKSYNTH_WERROR` | `OFF` | Warnings as errors (CI turns it on). |
+| `STRUCKSYNTH_PRESET_DUMP` | `OFF` | A dev-only DUMP button that writes the current patch as JSON to `$HOME`. |
 
 ## Checking a build
 
 Validate the CLAP with [clap-validator](https://github.com/free-audio/clap-validator)
 (`clap-validator validate build/StruckSynth.clap`), and the AU with `auval -v aumu StSy nLKL`. If
 auval says it can't find the component, `killall -9 AudioComponentRegistrar` and try again.
+
+## How this differs from the other projects
+
+Every Unlikelyware project builds the same way: `git clone`, `tools/fetch_deps.sh`, the three
+commands under "Build and test", and for a plugin `cmake --build build --target install-clap`. The
+same package list, the same `build/` folder, the same option names (`<PROJECT>_BUILD_VST3`,
+`<PROJECT>_UW_CORE_DIR` and so on). What's different here, and why:
+
+- One of the five synths (PlainOldSynth, StruckSynth, StruckKit, IFSynth, ModicumFM), which share the PolygraphModular framework, vendored, and DPF for the UI. `tools/fetch_deps.sh` also applies `patches/` to clap-wrapper (its AUv2 view), so `external/clap-wrapper` shows a local change: that is the patch, not uncommitted work.
+- Nothing else.
