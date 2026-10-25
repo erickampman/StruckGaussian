@@ -34,3 +34,12 @@
 ## M4: Later
 - [x] Pitch 7.25 as persistent per-key tuning table (CLAP tuning stays per-note)
 - [ ] Move onto the DPF fork (erickampman/DPF) with own DGL_NAMESPACE
+
+## Experiment: mode cloud (2026-10-25)
+- [x] `tools/cloudlab`: offline renderer, the object's modes drawn from a Gaussian (log2 ratio ~ Normal(mean, sigma)
+      in octaves, fundamental kept by default, amplitude 1/sqrt(ratio), seeded and the same on every platform),
+      fed to the plugin's own ModalBank. Sweeps of sigma, mean, count and seed at C2/C4/C6, measured; decisions and
+      findings in `tools/cloudlab/README.md`. No plugin, parameter or UI change.
+- [ ] Listen to the renders (`tools/cloudlab/renders/`, after `python3 -I tools/cloudlab/experiments.py`)
+- [ ] If kept: a Cloud series in ModalGenerators.hpp (mean, sigma, seed; trim the 6–8 dB hotter attack), then
+      copied to StruckKit, StruckRoom and PolygraphModularUnified
