@@ -25,7 +25,7 @@ the measurements). Decided 2026-10-25:
   in ModalBank, off.
 - The spectrum's bar height is each mode's starting amplitude (ModalBank::modeAmplitude); opacity is its decay time.
   Its axis is centred on f0 and reaches the furthest mode either side, so the f0 line stays put as Width moves.
-- Isolation (2026-10-25, after Eric found the pitch moving with Width):
+- Isolation (2026-10-25, after the pitch was heard moving with Width):
   - Clouds are recentred: the drawn values are shifted to average 0, so the mean log-ratio is exactly Centre for
     every seed, and Width spreads modes symmetrically about it. Raw draws had drifted the cloud off Centre in
     proportion to Width (seed 3, 25 modes: -103 cents at Width 0.2). A recentred draw outside 1/16..120 is dropped.
@@ -48,7 +48,9 @@ the measurements). Decided 2026-10-25:
       short and damped), Never Twice (Reseed Per Note). Rendered through cloudlab at C2/C4/C6: peaks within 2.6 dB of
       each other; Dark Gong's T60 5-6 s after narrowing (the first draft rang 18 s, low modes to 38 s)
 - [x] By hand: presets listened to (2026-10-25)
-- [ ] Help page still describes StruckSynth's materials
+- [x] Help page and README describe the cloud (2026-10-25): Object, Timbre (Focus), Decay (modes below the note
+      ring longer), the spectrum, the presets, tips and troubleshooting. help.html regenerated from help.md, with
+      real tables (the old converter left them as text)
 - [x] A strike's first block was wrong, two bugs inherited from StruckSynth (same probe there):
       - The bank read its pitch at the block's first sample, where the Slew (0.21 oct a sample at its fastest) has
         barely left the voice's previous pitch: the whole first block rang at the old note, then retuned (C5 after C4
@@ -91,13 +93,12 @@ the measurements). Decided 2026-10-25:
 
 ## M4: Later
 - [x] Pitch 7.25 as persistent per-key tuning table (CLAP tuning stays per-note)
-- [ ] Move onto the DPF fork (erickampman/DPF) with own DGL_NAMESPACE
+- [x] Move onto the DPF fork (erickampman/DPF) with own DGL_NAMESPACE (2026-10-23)
 
 ## Experiment: mode cloud (2026-10-25)
 - [x] `tools/cloudlab`: offline renderer, the object's modes drawn from a Gaussian (log2 ratio ~ Normal(mean, sigma)
       in octaves, fundamental kept by default, amplitude 1/sqrt(ratio), seeded and the same on every platform),
       fed to the plugin's own ModalBank. Sweeps of sigma, mean, count and seed at C2/C4/C6, measured; decisions and
       findings in `tools/cloudlab/README.md`. No plugin, parameter or UI change.
-- [ ] Listen to the renders (`tools/cloudlab/renders/`, after `python3 -I tools/cloudlab/experiments.py`)
-- [ ] If kept: a Cloud series in ModalGenerators.hpp (mean, sigma, seed; trim the 6–8 dB hotter attack), then
-      copied to StruckKit, StruckRoom and PolygraphModularUnified
+- [x] Listened to (2026-10-25): worth keeping, as its own instrument rather than a series in the other synths'
+      ModalGenerators.hpp. That is StruckGaussian (M5 above); the generator is `src/Module/ModalCloud.hpp`

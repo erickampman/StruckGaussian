@@ -1,10 +1,39 @@
 # StruckGaussian
 
-A cross-platform **CLAP modal-synthesis instrument** from Unlikelyware — a struck-resonator
-voice built on the PolygraphModular voice engine. Each note fires a shaped excitation burst
-into a bank of tuned resonant modes, so the sound is a struck object (bell, bar, tine, block)
-rather than an oscillator through a filter. Scaffolded from IFSynth, it carries the same
-vendored PolygraphModular engine and DPF/NanoVG UI kit.
+A cross-platform **CLAP instrument** from Unlikelyware: a struck object whose modes are a
+**Gaussian cloud** around the note. It is StruckSynth (a shaped excitation burst into a bank of
+tuned resonant modes) with the material tables replaced by a random draw: the modes' pitches are
+scattered on a bell curve around a centre you set, from a tight chorus on one pitch to a wide,
+clangy cluster. A seed picks which cloud, so a preset always plays the same object, or every note
+can draw its own.
+
+## The mode cloud
+
+Each mode's pitch, in octaves from the note, is drawn from a Gaussian: log2(ratio) ~ Normal(Centre,
+Width). The draws are recentred so they average exactly Centre, so Width spreads the modes evenly
+either side without moving the cloud. A second, optional Gaussian shapes how loud each mode starts
+(Focus).
+
+| Group | Parameters | Notes |
+|---|---|---|
+| Object | Centre | where the cloud sits, octaves above the played note: 0 centres it on the note |
+| | Width | how far the modes spread (the Gaussian's sigma), 0.002 to 3 octaves. Below about 0.02 the cloud is a chorus on one pitch; around 0.5 a struck object; above 1 a wide clang |
+| | Modes | how many, 1 to 64. A draw that lands outside 1/16 to 120 times the note is dropped, so a very wide cloud can have fewer |
+| | Seed | which cloud, 1 to 100: one seed is one object, the same on every platform |
+| | Reseed | Per Note: every note-on draws a new cloud, so no two hits are alike (chords too) |
+| | Keep Fund | Yes: one mode is always the note's own pitch, so the cloud can't lose the note |
+| | Stretch | inharmonicity, as in StruckSynth |
+| Timbre | Focus | how loud each mode starts. 0: about equal; 1: a Gaussian peaked at Focus Ctr, so the modes nearest it are loudest |
+| | Focus Ctr, Focus Wid | the loudness peak, octaves above the note (0 = the note), and how fast loudness falls away from it. Narrow Focus Wid for steep sides: at 0.1, modes a few tenths of an octave out are 20 to 40 dB down |
+| Decay | Decay, Damp | T60 of the note's own pitch, and how much faster higher modes die. Damp also makes modes **below** the note ring longer, so a cloud centred low rings long |
+
+The strike is scaled so the hit stays at about the same level whatever Modes, Width and Focus are:
+the bank keeps energy, not peak, constant, and a cloud of near-equal modes otherwise hits several dB
+harder as modes are added. The spectrum display draws each mode's starting level, its decay as
+opacity, and a line at the note's pitch (f0). Strike Position and Brightness, which StruckSynth has,
+are gone: both moved the loudness peak, which is Focus's job, and Strike Position's law assumes a
+string's mode shapes, which a cloud doesn't have. `tools/cloudlab/` is the offline renderer the cloud
+was prototyped in, with what its measurements showed.
 
 ## Status
 
@@ -19,10 +48,11 @@ note-off.
   mode. MIDI 1.0 values are scaled to MIDI 2.0 with the spec's Min-Center-Max method, so velocity
   127 is full scale (as are CC 127 and a full pitch bend), and 64 / 8192 the exact centre. A MIDI 2.0
   note-on with velocity 0 is a note-on, as the spec says; Vel>Level decides how loud it is.
-- **ModalBank** (resonator): up to 64 modes, material presets, stretch, decay (T60), damping
-  tilt + bell, strike position, brightness, stereo spread.
+- **ModalBank** (resonator): up to 64 modes from the Gaussian cloud (above), stretch, decay (T60),
+  damping tilt, loudness Focus, stereo spread.
 - **Voices**: Poly 10, Poly 20, Poly 32, or Mono (legato, with glide).
-- **Presets**: factory presets in `Presets/*.json`, baked into the plugin at build time.
+- **Presets**: eight cloud presets and Init in `Presets/*.json`, baked into the plugin at build
+  time.
 
 MIDI notes are sample-accurate: `process()` splits rendering at each event's frame offset.
 Parameter changes are applied per host block, and the note port advertises (and prefers) the MIDI
@@ -79,22 +109,19 @@ mpe-sender (an Unlikelyware test tool, not yet public) plays scripted MPE tests 
 
 ### Expression: pressure and timbre
 
-Most of a struck note is fixed at the strike: strike position and Brightness only shape how the strike
-excites each mode, so moving them later changes nothing until the next strike. What a player can still
-change on a ringing note is how it decays. The **Expression** panel's three knobs follow that split;
-each is 0 by default, so nothing changes until you turn it, and a controller that sends no pressure or
-CC74 sounds the same with the knobs up.
+Most of a struck note is fixed at the strike: the cloud and its Focus only shape how the strike excites
+each mode. What a player can still change on a ringing note is how it decays, which is what the
+**Expression** panel's two knobs do. Each is 0 by default, so nothing changes until you turn it, and a
+controller that sends no pressure or CC74 sounds the same with the knobs up.
 
 | Knob | Source | What it does | When |
 |---|---|---|---|
 | **Press>Decay** | pressure | decay time, ± octaves at full pressure (+2 = 4× longer). Positive: press to let it ring, ease off to damp it. Negative: pressing damps it, like a hand on a bar. | continuously, on the ringing note |
 | **Tmb>Tilt** | timbre (CC74) | added to **Damp** at full timbre: positive darkens the tail, negative brightens it | continuously, on the ringing note |
-| **Tmb>Pos** | timbre (CC74) | added to **Strike Pos** at full timbre: where your finger sits is where the mallet hits | at the strike |
 
 Pressure is channel pressure, poly pressure, or CLAP's Pressure note expression; timbre is CC74 on the
 note's channel, MIDI 2.0 per-note controller #74, or CLAP's Brightness. Per-note values win over the
-channel's. MPE controllers send a note's starting CC74 before its note-on, which is what Tmb>Pos reads.
-Both sources are PlainOldSynth's Pressure and Timbre modules, smoothed over 2 ms.
+channel's. Both sources are PlainOldSynth's Pressure and Timbre modules, smoothed over 2 ms.
 
 **A note is note number + channel + group.** The same key on two channels is two voices with
 independent per-note state, and note-offs the engine generates itself (sustain-pedal release,

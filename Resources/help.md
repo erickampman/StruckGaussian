@@ -20,11 +20,11 @@
 ~~~note [card]
 (#overview)
 ## Overview
-StruckGaussian is a **modal-synthesis instrument**: it sounds like a struck object (a bar, a bell, a tine, a block) rather than an oscillator through a filter.
+StruckGaussian is a **modal-synthesis instrument**: it sounds like a struck object rather than an oscillator through a filter. What's unusual is the object. Its modes, the frequencies it rings at, aren't a bar's or a bell's: they are a **cloud**, scattered at random on a bell curve around a pitch you choose. A narrow cloud is a chorus on one pitch; a wider one a struck object nobody has built; a wide one a clang.
 
 Each note goes through three stages:
 1. **Strike** makes a short excitation burst: a smooth mallet bump or a burst of noise, from a single sample long (the hardest, brightest hit) to about 20 ms or 1.6 periods of the note (the softest).
-2. **ModalBank** is a bank of up to 64 tuned resonators, one per vibrational **mode** of the object. The burst sets them ringing. Which frequencies they ring at comes from the **Material**; how long each one rings comes from **Decay** and **Damp**.
+2. **ModalBank** is a bank of up to 64 tuned resonators, one per **mode**. The burst sets them ringing. Where they sit comes from the **cloud** (Centre, Width, Modes, Seed); how loud each starts from **Focus**; how long each rings from **Decay** and **Damp**.
 3. **Final** sends the bank's stereo output to the host.
 
 **There is no amplitude envelope.** The resonators' own decay is the envelope, so a note rings on after you let go of the key, for as long as the decay says, and the voice frees itself once it has rung down to silence. Note-off doesn't stop a ringing note; it only ends your control of it.
@@ -33,11 +33,12 @@ Each note goes through three stages:
 (#getting-started)
 ## Getting Started
 1. **Load StruckGaussian** on an instrument track in your host (REAPER, Bitwig, StageHand, or any CLAP host).
-2. **Play.** The default patch (the same as the **Init** preset) is a free-free metal bar with a 2-second decay.
-3. **Pick a preset** from the **Preset** menu at the top right: Glass Bell, Init, Marimba, Tine EP or Wood Block.
-4. **Change the object** with **Material** in the Object panel, and watch the spectrum at the top left redraw.
-5. **Change how long it rings** with **Decay**, and how quickly its upper modes die away with **Damp**.
-6. **Change the mallet** with **Hardness** in the Strike panel: lower is harder and brighter.
+2. **Play.** The default patch (the same as the **Init** preset) is a 16-mode cloud half an octave wide, centred on the note, with a 2-second decay.
+3. **Pick a preset** from the **Preset** menu at the top right; see [Presets](#presets).
+4. **Change the cloud** with **Width** and **Centre** in the Object panel, and watch the spectrum at the top left redraw. **Seed** picks a different cloud of the same shape.
+5. **Make the note's pitch stand out** with **Focus** in the Timbre panel: at 1 the modes nearest the note are loudest. Narrow **Focus Wid** to make the others fall away faster.
+6. **Change how long it rings** with **Decay**, and how quickly its upper modes die away with **Damp**.
+7. **Change the mallet** with **Hardness** in the Strike panel: lower is harder and brighter.
 
 The host saves every parameter with its project.
 ~~~
@@ -69,11 +70,12 @@ Knobs with a time (Glide, Decay) work on a logarithmic scale, so the short end g
 ~~~note [card]
 (#spectrum)
 ## The Spectrum
-The display at the top left draws the current object's modes as bars:
-- **Across:** each mode's frequency, on a logarithmic scale, so octaves are equal widths.
-- **Height:** how long that mode rings, relative to the longest. A taller, more opaque bar outlasts a shorter, fainter one.
+The display at the top left draws the current cloud's modes as bars:
+- **Across:** each mode's frequency, on a logarithmic scale, so octaves are equal widths. The axis is centred on the note's pitch, marked by a thin line labelled **f0**, so modes below the note and above it are easy to tell apart, and the line stays put as Width changes.
+- **Height:** how loud each mode starts, relative to the loudest. Focus is what shapes this.
+- **Opacity:** how long each mode rings. A more solid bar outlasts a fainter one.
 
-It's drawn for a nominal C3 (moved by **Pitch**), and redraws whenever **Material**, **Modes**, **Stretch**, **Pitch**, **Decay**, **Damp** or the **Bell** knobs change. It's a picture of the decays, not of loudness: **Strike Pos** and **Brightness** change how loud each mode is, which it doesn't show. It holds no controls.
+It's drawn for a nominal C3 (moved by **Pitch**), for the **Seed**'s cloud: with **Reseed** on, every note you play draws a different one. It holds no controls.
 ~~~
 ~~~note [card]
 (#strike)
@@ -90,60 +92,30 @@ The exciter: what hits the object, and how hard.
 ~~~note [card]
 (#object)
 ## Object
-What is struck: its modes and its pitch.
+What is struck: its modes and its pitch. The modes' pitches are drawn at random, in octaves from the note, from a bell curve (a Gaussian) centred on **Centre** and as wide as **Width**.
 - **Pitch** (−4 to +4 oct, default 0): transposes the instrument, in octaves. It's continuous, so 1/12 of an octave is a semitone.
-- **Material** (26 choices, default Bar): the set of mode frequencies. See below.
-- **Modes** (1–64, default 64): how many modes sound, counting from the lowest. A material has only so many modes (see below), so a higher setting than that plays them all. Fewer modes is a simpler, purer tone. Modes that would land above the Nyquist frequency are muted.
-- **Stretch** (0–19, default 9): inharmonicity. It steps through a table of values: **9 is none**, higher steps push the upper modes sharp (as stiffness does in a real bar or piano string), lower steps pull them flat. The steps are −0.5, −0.2, −0.1, −0.05, −0.02, −0.01, −0.005, −0.002, −0.001, **0**, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, and each mode's frequency ratio is raised to the power 1 + that value. The knob shows the step number, not the value.
+- **Centre** (−2 to +4 oct, default 0): where the cloud sits, in octaves above the played note. **0** centres it on the note; **1** an octave above it.
+- **Width** (0.002–3 oct, default 0.50): how far the modes spread either side of Centre. Below about **0.02** they bunch onto one pitch and beat against each other, a chorus; around **0.5** the cloud is a struck object; above **1** it's a wide clang. Changing Width spreads the same cloud wider or narrower without moving it.
+- **Modes** (1–64, default 16): how many modes the cloud has. More is denser and smoother; fewer is simpler and costs less CPU. A mode that would land below 1/16 or above 120 times the note is left out, so a very wide cloud can have fewer than this. Modes above the Nyquist frequency are muted.
+- **Seed** (1–100, default 1): which cloud. Two seeds give two different clouds of the same shape, like two bells from one mould. The same seed is the same cloud every time, on every computer.
+- **Reseed** (Off / Per Note, default Off): **Per Note** draws a new cloud at every note-on, from the same Centre, Width and Modes, so no two hits are alike, and the notes of a chord differ too. **Off** plays the Seed's cloud on every note.
+- **Keep Fund** (No / Yes, default Yes): **Yes** makes one mode the note's own pitch, so the cloud always holds the note. **No** draws every mode, so the pitch you hear is wherever the cloud is loudest, and moves a little as Width changes.
+- **Stretch** (0–19, default 9): inharmonicity. It steps through a table of values: **9 is none**, higher steps push the upper modes sharp, lower steps pull them flat. The steps are −0.5, −0.2, −0.1, −0.05, −0.02, −0.01, −0.005, −0.002, −0.001, **0**, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, and each mode's frequency ratio is raised to the power 1 + that value. The knob shows the step number, not the value.
 ~~~
-~~~disclosure The materials [disclosure-title subtle]
-The first twelve are tables of real objects, worked out from their physics. The number is how many modes each has.
-
-| Material | Modes | What it is |
-|---|---|---|
-| String | 16 | An ideal string: exactly harmonic, a clear pitch |
-| Bar | 8 | A free bar (an untuned glockenspiel bar): strongly inharmonic, the struck-metal sound |
-| Tuned Bar | 6 | A marimba or vibraphone bar, undercut so its first overtones sit at 4× and 10× |
-| Membrane | 16 | An ideal drum head: inharmonic (Stretch can pull it toward a pitch) |
-| Open Tube | 12 | A tube open at both ends |
-| Closed Tube | 10 | A tube closed at one end |
-| Tine | 6 | A tine, as in an electric piano |
-| Bell | 12 | A bell, whose hum tone outlasts the others |
-| Guitar Body | 12 | The resonances of a guitar's body |
-| Violin Body | 14 | The resonances of a violin's body |
-| Soundboard | 18 | A piano soundboard |
-| Generic Body | 16 | A general instrument body |
-
-The other fourteen are **generated series**: mathematical sets of ratios that don't come from any real object. They produce up to 64 modes, fewer for series that grow fast. Integer series (Harmonic, Octave, Fibonacci, Prime, Triangular, Tetrahedral, Partition) fuse into a pitch; irrational ones (Golden, Silver) don't, and clang.
-
-| Material | Ratios |
-|---|---|
-| Harmonic | 1, 2, 3, 4 … |
-| Octave | Powers of 2: an octave stack |
-| Fibonacci | 1, 2, 3, 5, 8 …: harmonics with gaps |
-| Prime | 1, 2, 3, 5, 7 …: different gaps, hollower |
-| Triangular | 1, 3, 6, 10 …: sparse |
-| Tetrahedral | 1, 4, 10, 20 …: starts on the marimba tuning |
-| Partition | The partition numbers 1, 2, 3, 5, 7, 11 … |
-| Golden | Powers of φ: the most irrational |
-| Silver | Powers of 1 + √2: a sparser cousin of Golden |
-| Piano | A slightly stiff string, its upper harmonics a little sharp |
-| Power | n^1.5, between a string and a bar |
-| Sqrt | √n: slow-growing and dense, like a plate |
-| Box 3D | The modes of a rectangular room: dense |
-| Harmonic # | The harmonic numbers 1, 1.5, 1.83 …: logarithmic, lots of beating |
+~~~disclosure How the cloud is drawn [disclosure-title subtle]
+- Each mode's distance from the note, in octaves, is a random draw from a Gaussian: on average 0, spread by Width. The draws are then shifted so they average exactly 0, so the cloud's centre is exactly **Centre** for every seed: Width spreads the modes evenly either side without moving them.
+- With **Keep Fund** on, the note's own pitch is added as one more mode, and the rest are drawn.
+- The random numbers come from a generator whose output is fixed by the C++ standard, so a seed draws the same cloud on macOS and Linux.
+- A cloud's modes start in step at the strike, so their peaks add up: without a correction, more modes or near-equal levels would hit several dB harder for the same overall energy. StruckGaussian scales each strike to make up for it, so **Modes**, **Width** and **Focus** change the tone of the hit, not its level.
 ~~~
 ~~~note [card]
 (#decay)
 ## Decay
 How long the object rings, and which modes die first.
-- **Decay** (20 ms to 60 s, default 2.00 s): the T60 of the lowest mode, the time it takes to fall by 60 dB. This is the length of the note.
-- **Damp** (0–3, default 0.90): how much faster the upper modes die than the lowest. Each mode's decay is Decay × ratio^−Damp, where ratio is its frequency over the fundamental's. At **0** every mode rings as long as the lowest, like metal; around **2** the upper modes die quickly, like wood.
-- **Bell Amt** (−4 to +4 oct, default 0): adds a bump to the decay curve, so a band of modes rings longer (positive) or shorter (negative) than Damp alone gives. It's in octaves of decay time: +2 rings 4× longer at the band's centre, −2 4× shorter. **0** turns the bump off.
-- **Bell Ctr** (0–7 oct, default 2.00): the centre of that band, in octaves above the fundamental.
-- **Bell Wid** (0.1–4 oct, default 0.40): the width of the band, in octaves.
+- **Decay** (20 ms to 60 s, default 2.00 s): the T60 of a mode at the note's own pitch, the time it takes to fall by 60 dB.
+- **Damp** (0–3, default 0.90): how much faster higher modes die. Each mode's decay is Decay × ratio^−Damp, where ratio is its frequency over the note's. At **0** every mode rings as long, like metal; around **2** the upper modes die quickly, like wood.
 
-The Bell knobs do nothing while Bell Amt is 0. The spectrum shows their effect as a hump or a dip in the bar heights.
+**Damp works below the note too:** a mode under the note's pitch rings *longer* than Decay. A cloud centred below the note, or a wide one, rings longer than Decay says, and keeps voices alive longer.
 ~~~
 ~~~note [card]
 (#global)
@@ -157,17 +129,19 @@ The Bell knobs do nothing while Bell Amt is 0. The spectrum shows their effect a
 ~~~note [card]
 (#timbre)
 ## Timbre
-How the strike sets each mode ringing. Both are read **at the strike**, so turning them while a note rings changes nothing until the next note.
-- **Strike Pos** (0–1, default 0.25): where on the object it's struck. Striking at a mode's node leaves that mode silent; **0.5** cancels every even mode, as plucking a string in the middle does, for a hollow tone. Near **0** (the edge) the low modes are weak and the sound is thin.
-- **Brightness** (−1 to +1, default 0): tilts the modes' levels. Positive favours the upper modes, negative the lower. The overall level stays the same, so Brightness is a tone control, not a volume control.
+How loud each mode starts. Focus is read **at the strike**, so turning it while a note rings changes nothing until the next note.
+- **Focus** (0–1, default 0): **0** leaves the modes at about equal levels. **1** shapes them into a second bell curve, centred on **Focus Ctr**, so the modes nearest it are loudest and the others fall away. In between, it's a blend.
+- **Focus Ctr** (−2 to +4 oct, default 0): where the loudness peaks, in octaves above the note. **0** makes the note's own pitch loudest.
+- **Focus Wid** (0.05–3 oct, default 0.50): how fast loudness falls away from the peak. Narrow it for steep sides: at **0.1**, modes a few tenths of an octave out are 20 to 40 dB down; at **0.05** only the modes right at the peak are left. Wider than the cloud, it barely changes anything.
+
+The overall level stays about the same as Focus changes, so it's a tone control, not a volume control.
 ~~~
 ~~~note [card]
 (#expression)
 ## Expression
-What a controller's **pressure** and **timbre** do to a note. Each knob is 0 by default, which does nothing, so a controller that sends no pressure or timbre sounds the same with these up.
+What a controller's **pressure** and **timbre** do to a ringing note. Each knob is 0 by default, which does nothing, so a controller that sends no pressure or timbre sounds the same with these up.
 - **Press>Decay** (−4 to +4 oct, default 0): pressure changes the decay time of the ringing note, by this many octaves at full pressure (+2 rings 4× longer). Positive: press to keep it ringing, ease off to damp it. Negative: pressing damps it, like a hand on a bar. It works all through the note.
 - **Tmb>Tilt** (−3 to +3, default 0): timbre adds to **Damp**, by this much at full timbre. Positive darkens the tail, negative brightens it. It works all through the note.
-- **Tmb>Pos** (−1 to +1, default 0): timbre adds to **Strike Pos**, by this much at full timbre, so where your finger sits is where the mallet hits. It's read **at the strike** only.
 
 **Pressure** is channel pressure, poly pressure, or a CLAP Pressure expression. **Timbre** is CC 74 on the note's channel, MIDI 2.0 per-note controller 74, or a CLAP Brightness expression. A per-note value wins over the channel's. Changes are smoothed over 2 ms.
 ~~~
@@ -219,13 +193,17 @@ For a note the host sends as a CLAP note, StruckGaussian reports the note's end 
 ## Presets
 The **Preset** menu at the top right holds the factory presets, in alphabetical order:
 
-| Preset | Material | Decay | Character |
+| Preset | Cloud | Decay | Character |
 |---|---|---|---|
-| Glass Bell | Bell, 48 modes | 8 s | Hard strike, very little damping: long and bright |
-| Init | Bar, 64 modes | 2 s | The default patch |
-| Marimba | Tuned Bar, 24 modes | 0.7 s | Heavy damping, a little dark |
-| Tine EP | Tine, 32 modes | 3 s | A bell bump (+1 oct at 3 oct up) for an electric-piano shimmer |
-| Wood Block | Closed Tube, 12 modes, an octave up | 0.12 s | Very hard strike, heavy damping: a short knock |
+| Chorus Unison | 12 modes, Width 0.008 | 3.5 s | Every mode on the note: a chorused single pitch |
+| Clang Cluster | 20 modes, 1.5 oct up | 2.2 s | Hard strike, bright and inharmonic |
+| Dark Gong | 40 modes, half an octave under | 3 s | Soft mallet; low modes ring long |
+| Focused Glass | 32 modes, Width 0.6 | 3 s | Focus 1 on the note, narrow: a clear pitch in a halo |
+| Halo | 48 modes, Width 1 | 4 s | A wide cloud with a broad loudness peak on the note |
+| Init | 16 modes, Width 0.5 | 2 s | The default patch |
+| Never Twice | 24 modes, 0.8 oct up | 2.5 s | Reseed Per Note: every hit is a new cloud |
+| Octave Shimmer | 16 modes, an octave up, Width 0.015 | 3 s | The note with a chorused octave above it |
+| Wood Cluster | 10 modes, Width 0.35 | 0.5 s | Heavy damping: a short, woody knock |
 
 - **Choosing a preset sets every sound parameter**, Voices and the Expression knobs included. It leaves the **MPE** switch alone.
 - The menu shows **--** until you choose one, and again when the editor is reopened. Changing a knob after choosing a preset doesn't change the name shown.
@@ -234,24 +212,28 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 ~~~note [card]
 (#tips)
 ## Tips
-- **Start from the material, then the decay.** Material decides what the object is; Decay and Damp decide what it's made of. The same **Tuned Bar** is a marimba with Damp around 1.6 and a vibraphone with Damp near 0.
+- **Width is the main knob.** Narrow for a pitch with chorus, middle for an object, wide for a clang. Then **Seed** through a few clouds of that width: they differ more than you'd expect.
+- **For a clear pitch from a wide cloud**, keep **Keep Fund** on and set **Focus** to 1 with **Focus Wid** around 0.1–0.2.
+- **For a bell-like cloud**, put Centre around 1 (an octave up) with Keep Fund on: the note plus a cloud of overtones.
 - **Damp is the material knob.** Low Damp sounds like metal or glass, high Damp like wood or skin.
-- **Hardness for tone, Brightness for balance.** Hardness changes the attack (a soft mallet takes the click off). Brightness changes the balance of the whole ring.
-- **Strike Pos 0.5** on String or Harmonic cancels the even modes, for a hollow, clarinet-like tone.
-- **Stretch** above 9 makes a harmonic material stiffer, its upper modes sharp, as in a piano string: try String with Stretch at step 11–13.
-- **Fewer Modes** makes a purer, simpler sound, and costs less CPU.
+- **Low and wide clouds ring long**, because Damp lengthens modes below the note. Shorten **Decay** to keep voices from piling up.
+- **Beating speeds up with pitch.** Modes a fixed fraction of an octave apart beat slowly on low notes and fast on high ones, so a narrow cloud shimmers in the bass and buzzes at the top.
+- **Reseed Per Note** suits repeated notes and drum-like parts, where a fixed cloud would sound mechanical.
+- **Fewer Modes** makes a simpler sound, and costs less CPU.
 - **For an even keyboard**, keep **Contact** on Note-Rel. Wall-Clk makes the bass boomier and the top pingier, as real mallets do.
-- **Long decays need voices.** With a Decay of several seconds, Poly 20 or Poly 32 keeps older notes from being cut off.
-- **For a hand-damped bar on a pressure controller**, set Press>Decay negative: press into a note to stop it.
+- **For a hand-damped object on a pressure controller**, set Press>Decay negative: press into a note to stop it.
 ~~~
 ~~~note [card]
 (#troubleshooting)
 ## Troubleshooting
 - **Notes keep ringing after I let go.** That's the design: a struck object rings until it dies away. Shorten **Decay**, raise **Damp**, or use a negative **Press>Decay** to damp it by pressure.
+- **Notes ring much longer than Decay.** The cloud has modes below the note, which Damp lets ring longer. Raise **Centre**, narrow **Width**, or shorten **Decay**.
 - **Notes cut off in fast passages.** They're running out of voices. Choose Poly 20 or Poly 32, or shorten Decay.
 - **Glide does nothing.** It only works in **Mono**.
-- **Raising Modes changes nothing.** The material has fewer modes than that (see *The materials* under [Object](#object)).
-- **Strike Pos or Brightness don't change a held note.** They're read at the strike; play the next note.
+- **The pitch wanders as I change Width.** **Keep Fund** is off, so the pitch you hear is the loudest mode, which moves. Turn Keep Fund on.
+- **Focus barely does anything.** **Focus Wid** is wider than the cloud. Narrow it, or widen the cloud.
+- **Raising Modes changes little at a wide Width.** Some draws land outside 1/16–120 times the note and are left out.
+- **Focus doesn't change a held note.** It's read at the strike; play the next note.
 - **The Expression knobs do nothing.** The controller isn't sending pressure or CC 74, or the knobs are at 0.
 - **Bends are huge.** MPE is on and the controller isn't an MPE controller: member channels bend ±48 semitones. Turn **MPE** off.
 - **Distortion.** Lower **Level**. Many loud notes ringing together add up.

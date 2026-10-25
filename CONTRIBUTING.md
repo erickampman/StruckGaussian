@@ -26,6 +26,10 @@ would silently rewire everyone's saved projects. For each new parameter:
 
 MIDI controller setup (MPE on/off and the like) stays out of presets.
 
+The cloud's parameters (Centre, Width, Seed, Reseed, Keep Fund, Focus, Focus Ctr, Focus Wid) were put
+in panel order, and Material, Strike Pos, Brightness, Tmb>Pos and the damp bell's knobs removed, before
+StruckGaussian's first release; no saved project had them yet. From the first release on, append.
+
 ## MIDI 2.0 and MPE
 
 MIDI 2.0 per-note messages and CLAP note expressions are the main path. MPE is accepted as a
@@ -36,6 +40,26 @@ compatibility input (an Off/On switch, lower zone); nothing in this family of pr
 `state_load` runs on the main thread while `process()` may be running. It stores the loaded values
 only; the audio thread applies them at the start of the next block (or `activate()` does). Never
 rebuild the voice graph from the main thread.
+
+## The mode cloud
+
+`src/Module/ModalCloud.hpp` is a framework-free generator, like ModalGenerators; `ModalBankModule` feeds
+its modes to ModalBank as a generated material (a stable buffer, `setMaterial`, `invalidate`).
+- **A seed is the same cloud everywhere.** The Gaussian is Box-Muller on `std::mt19937`, whose output
+  the standard fixes. Never `std::normal_distribution`: libc++ and libstdc++ draw different values, so a
+  preset would be a different object on the Mac.
+- **Recentred.** The draws are shifted to average exactly 0, so Width spreads the cloud about Centre
+  without moving it. A recentred draw outside 1/16..120 is dropped, never redrawn or clamped.
+- **Regenerated only when an input changes** (and, with Reseed, at a note-on), then `invalidate()`:
+  the buffer pointer never changes, so `setMaterial` alone can't see new contents.
+- **The trim scales the strike, not the output.** `kTrimRef` over the bank's in-phase peak
+  (`ModalBank::modeAmplitude`), so Modes, Width and Focus leave the hit's level alone, and a trim that
+  moves never changes a ringing note.
+- **This ModalBank differs from the other synths' copies**: `modeAmplitude()` and
+  `setPositionWeighting()` (off here: Strike Position's law assumes a string's mode shapes). Copy them
+  across if the cloud goes to another synth.
+- `tools/cloudlab/` is the offline renderer the cloud was prototyped in, with its README of findings;
+  it builds `ModalCloud.hpp` and `ModalBank.cpp` from `src/Module` in place.
 
 ## Dependencies
 
@@ -66,6 +90,11 @@ unaffected.
 - **Test helpers:** a full-scale bend computes 2³², which wraps to 0 in a `uint32_t`; clamp it.
 - **Pitch tests:** measure on the simplest waveform you can. Zero crossings with interpolation are
   exact; autocorrelation needs peak interpolation.
+- **A control input is read at the block's last sample.** The bank sets its pitch once per block, and a
+  new note's pitch comes through the Slew, which needs a few samples even when instant: read at sample
+  0, the whole first block rang at the voice's previous pitch.
+- **Smoothers start at their target.** Final's level smoother once started each voice at 1, so a
+  voice's first note was 1/Level louder for ~20 ms.
 
 ## Platform-specific code
 
@@ -93,8 +122,9 @@ src/Common/           shim + MIDI + params + utilities
                         clap_ump.h (CLAP↔UMP), pm_params.h / pm_param_data.* / pm_addresses.h,
                         ParamAddressMacros.h, CPPTypes.hpp, CPPProcs.hpp, KPBuffPairHelper.hpp
 src/Module/           Module core + modules
-                        StrikeModule.*, ModalBank.* / ModalBankModule.* (+ ModalMaterials,
-                        ModalGenerators, ModalDiscretizer), Slew, PitchConverter, Final; the
+                        StrikeModule.*, ModalBank.* / ModalBankModule.* (+ ModalCloud, the mode
+                        cloud; ModalMaterials, ModalGenerators, ModalDiscretizer), Slew,
+                        PitchConverter, Final; the
                         IFS / Sine / ADSR / LPF / CVMixer / Level / Combine modules inherited
                         from IFSynth stay instantiated but unconnected
 src/Voice/            voice engine
@@ -102,7 +132,10 @@ src/Voice/            voice engine
                         ModuleInitSpecs.hpp, pm_module_specs.cpp, ConnectionCommandQueue.hpp
 Presets/              factory presets (JSON), compiled into GeneratedPresets.h by
                         tools/gen_presets.py
-Resources/            font + logo, embedded into the binary at build time
+Resources/            font + logo + help page (help.md, the source of help.html), embedded into the
+                        binary at build time
+tools/                fetch_deps.sh, apply_dep_patches.sh, gen_presets.py; cloudlab/ (the offline
+                        renderer the mode cloud was prototyped in)
 test/                 in-process self-tests (see TESTING.md)
 dpf/                  DISTRHO Plugin Framework (submodule, + nested pugl) — the GUI layer only
 external/clap         CLAP headers (submodule, pinned 1.2.9) — the plugin and the tests
