@@ -43,8 +43,13 @@ the measurements). Decided 2026-10-25:
 - [x] By hand: played in StageHand (2026-10-25)
 - [ ] Presets: GlassBell, Marimba, TineEP, WoodBlock still name StruckSynth's materials; replace with cloud presets
 - [ ] Help page still describes StruckSynth's materials
-- [ ] A fresh voice's first strike differs from its later ones (pitch measured 271 against 258 Hz with one mode at
-      T60 0.05; later strikes identical). Not from the cloud; probably inherited from StruckSynth, not yet checked there
+- [x] A strike's first block was wrong, two bugs inherited from StruckSynth (same probe there):
+      - The bank read its pitch at the block's first sample, where the Slew (0.21 oct a sample at its fastest) has
+        barely left the voice's previous pitch: the whole first block rang at the old note, then retuned (C5 after C4
+        started near 281 Hz; a voice's first note started from A440). It reads the block's last sample now.
+      - Final's level smoother started every voice at 1, not Level, so a voice's first note was 1/Level louder for
+        ~20 ms (+3 dB at the default 0.7). It starts at the first block's values now.
+      ss-bend checks both. The other synths have one or both: ReleaseUMP R2-12, R2-13
 - [ ] macOS: build, auval (aumu StGa nLKL)
 
 ## Tests
