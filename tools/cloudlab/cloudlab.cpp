@@ -17,18 +17,14 @@
 //  the generators' law, and damp is 1: DampTilt, Brightness and Strike Position
 //  shape the cloud as they shape every other material.
 //
-//  Ratios are drawn from a truncated Gaussian: a draw outside [kMinRatio,
-//  kMaxRatio] is redrawn. Modes are then sorted by ratio, because the bank pans
-//  by index and every table and series is in rising order.
-//
-//  Repeatable: the Gaussian is Box-Muller on std::mt19937, whose output the C++
-//  standard fixes exactly. std::normal_distribution is implementation-defined,
-//  so it would draw a different cloud on the Mac (libc++) than on Linux.
+//  The cloud itself is src/Module/ModalCloud.hpp, the plugin's generator (in
+//  StruckSynth, where this lab started, it was written out here).
 //
 //  Usage: cloudlab out.wav [key=value ...]   (cloudlab --help lists the keys)
 //
 
 #include "ModalBank.hpp"
+#include "ModalCloud.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -43,10 +39,9 @@
 
 namespace {
 
-// Truncation of the cloud. 120 is ModalGenerators' kMaxRatio; 1/16 keeps a
-// cloud centred below the note from spending modes under about 4 Hz at C2.
-constexpr double kMinRatio = 1.0 / 16.0;
-constexpr double kMaxRatio = 120.0;
+// StruckGaussian's trim (ModalBankModule.cpp): the strike scaled so the bank's
+// in-phase peak is Bar's at the defaults.
+constexpr double kTrimRef = 2.1181;
 
 // Pairs of audible modes closer than this beat (ModalGenerators' "Density").
 constexpr double kBeatHz = 30.0;
@@ -63,6 +58,9 @@ struct Params {
     double sigma = 0.5;         // octaves
     int    seed  = 1;
     int    keep1 = 1;           // 1: mode 0 is the fundamental (ratio 1)
+    double focus = 0.0;         // loudness: 0 = 1/sqrt(ratio), 1 = a Gaussian peaked at fctr
+    double fctr  = 0.0;         // octaves above the fundamental
+    double fwid  = 0.5;         // octaves
     std::string mat;            // instead of a cloud: a ModalMaterials table, for reference
 
     // the bank and the strike, at the plugin's defaults
@@ -73,6 +71,7 @@ struct Params {
     double stretch  = 0.0;
     double spread   = 0.3;
     double hardness = 0.15;     // effective: Hardness 0.3 at velocity 1 with VelToHardness 0.5
+    int    trim     = 0;        // 1: StruckGaussian's peak trim. 0, as the README's measurements were made
 };
 
 const ModalMaterial* findMaterial(const std::string& name) {
@@ -92,6 +91,7 @@ bool setParam(Params& p, const std::string& k, const std::string& v) {
     std::map<std::string, double*> num = {
         {"note", &p.note}, {"vel", &p.vel}, {"fs", &p.fs}, {"seconds", &p.seconds},
         {"mean", &p.mean}, {"sigma", &p.sigma},
+        {"focus", &p.focus}, {"fctr", &p.fctr}, {"fwid", &p.fwid},
         {"t60", &p.t60}, {"tilt", &p.tilt}, {"pos", &p.pos}, {"bright", &p.bright},
         {"stretch", &p.stretch}, {"spread", &p.spread}, {"hardness", &p.hardness},
     };
@@ -100,6 +100,7 @@ bool setParam(Params& p, const std::string& k, const std::string& v) {
     if (k == "seed")  { p.seed  = std::atoi(v.c_str()); return true; }
     if (k == "keep1") { p.keep1 = std::atoi(v.c_str()); return true; }
     if (k == "mat")   { p.mat   = v; return true; }
+    if (k == "trim")  { p.trim  = std::atoi(v.c_str()); return true; }
     return false;
 }
 
@@ -108,37 +109,18 @@ void usage() {
         "cloudlab out.wav [key=value ...]\n"
         "  note vel seconds fs\n"
         "  cloud: count mean sigma (octaves above f0) seed keep1 (1 = mode 0 at ratio 1)\n"
+        "  loudness: focus (0 = 1/sqrt(ratio), 1 = Gaussian) fctr fwid (octaves)\n"
         "  mat=<material> renders a ModalMaterials table instead, for reference\n"
         "  bank:  t60 tilt pos bright stretch spread    strike: hardness (0..1 of 1.6 periods)\n"
+        "  trim=1: StruckGaussian's peak trim (the plugin always applies it)\n"
         "Materials: string bar tunedbar membrane opentube closedtube tine bell\n"
         "           guitarbody violinbody soundboard genericbody");
 }
 
-// A uniform in (0, 1) from 53 bits of mt19937 output: never 0, so log() is safe.
-double uniform01(std::mt19937& g) {
-    const uint64_t hi = g() >> 5, lo = g() >> 6;            // 27 + 26 bits
-    return ((double)((hi << 26) | lo) + 0.5) / 9007199254740992.0;
-}
-
-// Box-Muller, one value per call (the second is discarded: simpler to reason
-// about, and a cloud is at most 64 draws).
-double gaussian(std::mt19937& g) {
-    const double u1 = uniform01(g), u2 = uniform01(g);
-    return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
-}
-
+// The plugin's generator (src/Module/ModalCloud.hpp), so the lab draws the cloud the plugin plays.
 int makeCloud(const Params& p, ModalMode* out) {
-    const int n = std::clamp(p.count, 1, ModalBank::kMaxModes);
-    std::mt19937 g((uint32_t)p.seed);
-    int i = 0;
-    if (p.keep1) out[i++] = { 1.0f, 1.0f, 1.0f };
-    while (i < n) {
-        const double r = std::exp2(p.mean + p.sigma * gaussian(g));
-        if (r < kMinRatio || r > kMaxRatio) continue;      // truncated: redraw
-        out[i++] = { (float)r, (float)(1.0 / std::sqrt(r)), 1.0f };
-    }
-    std::sort(out, out + n, [](const ModalMode& a, const ModalMode& b) { return a.ratio < b.ratio; });
-    return n;
+    return ModalCloud::generate(p.count, p.mean, p.sigma, (uint32_t)p.seed, p.keep1 != 0,
+                                out, ModalBank::kMaxModes, p.focus, p.fctr, p.fwid);
 }
 
 bool writeWavFloat(const char* path, const std::vector<float>& L, const std::vector<float>& R, int fs) {
@@ -210,9 +192,15 @@ int main(int argc, char** argv) {
     bank.setDecayT60((float)p.t60);
     bank.setDampTilt((float)p.tilt);
     bank.setStrikePosition((float)p.pos);
+    bank.setPositionWeighting(!p.mat.empty());   // clouds as in StruckGaussian: no string mode shapes
     bank.setBrightness((float)p.bright);
     bank.setSpread((float)p.spread);
     bank.prepare();
+    if (p.trim) {
+        double peak = 0.0;
+        for (int i = 0; i < bank.activeModes(); ++i) peak += bank.modeAmplitude(i);
+        if (peak > 1e-6) for (float& s : strike) s = (float)(s * kTrimRef / peak);
+    }
 
     std::vector<float> outL(N), outR(N);
     for (size_t i = 0; i < N; i += 512) {
@@ -247,6 +235,8 @@ int main(int argc, char** argv) {
                  audible, mat->count, sub, fmin, fmax, beating, kBeatHz, t60min, t60max);
     std::fprintf(stderr, "ratios");
     for (int i = 0; i < mat->count; ++i) std::fprintf(stderr, " %.3f", mat->modes[i].ratio);
+    std::fprintf(stderr, "\nstarting amplitudes");
+    for (int i = 0; i < bank.activeModes(); ++i) std::fprintf(stderr, " %.3f", bank.modeAmplitude(i));
     std::fprintf(stderr, "\n%s: note %.1f (%.1f Hz), peak %.4f\n", argv[1], p.note, f0, peak);
     return 0;
 }

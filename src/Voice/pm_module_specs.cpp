@@ -92,10 +92,11 @@ const std::vector<ModuleInitSpec>& getModuleInitSpecs() {
       // Strike: the exciter. Uses the MIDI slot (note-on → burst); Reset clears any active burst.
       {strike1Address, &strikeConstantsGroup, InitStrikeModule, DeinitStrikeModule,
        ProcessStrikeModule, MIDIStrikeModule, nullptr, ResetStrikeModule, SampleRateStrikeModule},
-      // ModalBank: the resonator. No MIDI/param procs; Reset flushes filter state (voice alloc,
-      // NOT note-on — re-striking a ringing bank must not reset the ring-down).
+      // ModalBank: the resonator. The MIDI proc only notes a note-on, where Reseed draws a new
+      // cloud; Reset flushes filter state (voice alloc, NOT note-on — re-striking a ringing bank
+      // must not reset the ring-down).
       {modalBank1Address, &modalBankConstantsGroup, InitModalBankModule, DeinitModalBankModule,
-       ProcessModalBankModule, nullptr, nullptr, ResetModalBankModule, SampleRateModalBankModule},
+       ProcessModalBankModule, MIDIModalBankModule, nullptr, ResetModalBankModule, SampleRateModalBankModule},
    };
    return specs;
 }

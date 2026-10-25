@@ -252,7 +252,7 @@ const ModuleParamConstantsGroup strikeConstantsGroup = {
    const_cast<char*>("strike"), sizeof(strikeConstants) / sizeof(strikeConstants[0]), strikeConstants};
 
 // ModalBank — damped modal resonator bank. Defaults from PM (ParamGroupData.m). Items 1-5 are
-// connection ports (0,0,0). Material default = Bar; Stretch is an INDEX into kModalStretchValues.
+// connection ports (0,0,0). The object is a mode cloud (ModalCloud.hpp), centred on the note; Stretch is an INDEX into kModalStretchValues.
 static const ModuleParamConstants modalBankConstants[] = {
    {"input",          ModalBankParamItemInput,          0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection (excitation)
    {"pitchInput",     ModalBankParamItemPitchInput,     0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
@@ -261,8 +261,8 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"brightModInput", ModalBankParamItemBrightModInput, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
    {"pitch",          ModalBankParamItemPitch,          0, 0, nullptr, -4.0f, 4.0f, 0.0f, 0},
    {"pitchModLevel",  ModalBankParamItemPitchModLevel,  0, 0, nullptr, -5.0f, 5.0f, 1.0f, 0},
-   {"material",       ModalBankParamItemMaterial,       0, 0, nullptr, (float)ModalBankMaterialString, (float)ModalBankMaterialGenHarmonicNumber, (float)ModalBankMaterialBar, 0},
-   {"modeCount",      ModalBankParamItemModeCount,      0, 0, nullptr, 1.0f, 64.0f, 64.0f, 0},
+   {"cloudCentre",    ModalBankParamItemCloudCentre,    0, 0, nullptr, -2.0f, 4.0f, 0.0f, 0},
+   {"modeCount",      ModalBankParamItemModeCount,      0, 0, nullptr, 1.0f, 64.0f, 16.0f, 0},
    {"stretch",        ModalBankParamItemStretch,        0, 0, nullptr, 0.0f, 19.0f, 9.0f, 0}, // index into kModalStretchValues
    {"decayT60",       ModalBankParamItemDecayT60,       0, 0, nullptr, 0.02f, 60.0f, 2.0f, 0},
    {"decayModLevel",  ModalBankParamItemDecayModLevel,  0, 0, nullptr, -5.0f, 5.0f, 0.0f, 0},
@@ -281,6 +281,13 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"pitchMod2Level", ModalBankParamItemPitchMod2Level, 0, 0, nullptr, -5.0f, 5.0f, 1.0f, 0},
    {"dampTiltModInput", ModalBankParamItemDampTiltModInput, 0, 0, nullptr, 0.0f, 0.0f, 0.0f, 0}, // connection
    {"dampTiltModLevel", ModalBankParamItemDampTiltModLevel, 0, 0, nullptr, -3.0f, 3.0f, 0.0f, 0},
+   {"cloudWidth",     ModalBankParamItemCloudWidth,     0, 0, nullptr, 0.002f, 3.0f, 0.5f, 0},
+   {"cloudSeed",      ModalBankParamItemCloudSeed,      0, 0, nullptr, 1.0f, 100.0f, 1.0f, 0},
+   {"cloudReseed",    ModalBankParamItemCloudReseed,    0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"cloudKeepFund",  ModalBankParamItemCloudKeepFund,  0, 0, nullptr, 0.0f, 1.0f, 1.0f, 0},
+   {"cloudFocus",     ModalBankParamItemCloudFocus,     0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"cloudFocusCentre", ModalBankParamItemCloudFocusCentre, 0, 0, nullptr, -2.0f, 4.0f, 0.0f, 0},
+   {"cloudFocusWidth", ModalBankParamItemCloudFocusWidth, 0, 0, nullptr, 0.05f, 3.0f, 0.5f, 0},
 };
 const ModuleParamConstantsGroup modalBankConstantsGroup = {
    const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};

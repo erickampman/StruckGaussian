@@ -16,6 +16,7 @@
 
 extern const void        InitModalBankModule(uint32_t count, Module* module);
 extern const void        DeinitModalBankModule(Module* module);
+extern void              MIDIModalBankModule(const pm::UmpMessage& message, Module* module);
 extern const void        ResetModalBankModule(Module* module);
 extern const void        SampleRateModalBankModule(Module* module, double newSampleRate);
 extern const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count, Module* module);

@@ -309,16 +309,18 @@ void installTestPatch(const clap_plugin_t* plugin) {
     add(kParamVelToHardness, 0.0);
     add(kParamContactMode, 0.0);
     add(kParamPitch, 0.0);
-    add(kParamMaterial, 0.0);           // "String": the harmonic series
-    add(kParamModeCount, 64.0);
+    add(kParamCloudCentre, 0.0);
+    add(kParamCloudWidth, 0.5);
+    add(kParamModeCount, 1.0);          // the kept fundamental alone: one unambiguous pitch
+    add(kParamCloudSeed, 1.0);
+    add(kParamCloudReseed, 0.0);
+    add(kParamCloudKeepFund, 1.0);
     add(kParamStretch, 9.0);            // kModalStretchValues[9] == 0.0 (perfectly harmonic)
     add(kParamDecayT60, 8.0);           // ring long enough to measure
     add(kParamDampTilt, 0.0);
-    add(kParamDampBellAmount, 0.0);
-    add(kParamDampBellCentre, 2.0);
-    add(kParamDampBellWidth, 0.4);
-    add(kParamStrikePosition, 0.05);    // near the end: every mode, fundamental included, is excited
-    add(kParamBrightness, 0.0);
+    add(kParamFocus, 0.0);
+    add(kParamFocusCentre, 0.0);
+    add(kParamFocusWidth, 0.5);
 
     std::vector<const clap_event_header_t*> headers;
     headers.reserve(storage.size());
@@ -521,12 +523,12 @@ int main(int argc, char** argv) {
         if (params != nullptr) {
             check(params->count(inst.plugin) == uint32_t(kParamCount), "parameter count matches");
             clap_param_info_t info{};
-            if (params->get_info(inst.plugin, kParamMaterial, &info)) {
-                check(info.id == kParamMaterial, "param id is the 0-based index (DPF-compatible)");
-                check((info.flags & CLAP_PARAM_IS_ENUM) != 0, "Material is flagged as an enum");
+            if (params->get_info(inst.plugin, kParamCloudReseed, &info)) {
+                check(info.id == kParamCloudReseed, "param id is the 0-based index (DPF-compatible)");
+                check((info.flags & CLAP_PARAM_IS_ENUM) != 0, "Reseed is flagged as an enum");
                 char text[128] = {};
-                if (params->value_to_text(inst.plugin, kParamMaterial, 0.0, text, sizeof(text)))
-                    check(std::strcmp(text, "String") == 0, "enum value_to_text returns the label");
+                if (params->value_to_text(inst.plugin, kParamCloudReseed, 1.0, text, sizeof(text)))
+                    check(std::strcmp(text, "Per Note") == 0, "enum value_to_text returns the label");
                 else
                     check(false, "value_to_text works");
             } else {
@@ -767,11 +769,11 @@ int main(int argc, char** argv) {
             const auto* params = static_cast<const clap_plugin_params_t*>(
                 probe.plugin->get_extension(probe.plugin, CLAP_EXT_PARAMS));
             bool allZero = params != nullptr;
-            for (const uint32_t index : { uint32_t(kParamPressToDecay), uint32_t(kParamTimbreToTilt), uint32_t(kParamTimbreToPos) }) {
+            for (const uint32_t index : { uint32_t(kParamPressToDecay), uint32_t(kParamTimbreToTilt) }) {
                 clap_param_info_t info{};
                 allZero = allZero && params->get_info(probe.plugin, index, &info) && info.default_value == 0.0;
             }
-            check(allZero, "Press>Decay, Tmb>Tilt and Tmb>Pos exist and default to 0 (no effect)");
+            check(allZero, "Press>Decay and Tmb>Tilt exist and default to 0 (no effect)");
             probe.destroy();
         }
         // The tail's level a second after the strike, with full CLAP pressure on the note.

@@ -25,24 +25,27 @@ enum ParamIndex {
    kParamContactMode,       // 0 = Note-Relative, 1 = Wall-Clock
    // --- ModalBank: object ---
    kParamPitch,             // transpose offset, octaves
-   kParamMaterial,          // indexed material / generator (see ModalBankMaterial)
-   kParamModeCount,         // number of modes (clamps to the material's depth)
+   kParamCloudCentre,       // the mode cloud's centre, octaves above the note (0 = on the note)
+   kParamCloudWidth,        // the cloud's spread (Gaussian sigma), octaves
+   kParamModeCount,         // number of modes in the cloud
+   kParamCloudSeed,         // which cloud: one seed is one object
+   kParamCloudReseed,       // 0 = Off (the seed's cloud every note), 1 = a new cloud per note
+   kParamCloudKeepFund,     // 1 = mode 0 is the note's fundamental, 0 = every mode is drawn
    kParamStretch,           // inharmonicity index (into kModalStretchValues)
    // --- ModalBank: decay ---
    kParamDecayT60,          // T60 of mode 0, seconds
    kParamDampTilt,          // HF damping (0 metal .. ~2 wood)
-   kParamDampBellAmount,    // non-monotonic damping bump, octaves of T60 (0 = off)
-   kParamDampBellCentre,    // bell centre, octaves above the fundamental
-   kParamDampBellWidth,     // bell width, octaves
-   // --- ModalBank: timbre ---
-   kParamStrikePosition,    // 0..1; 0.5 cancels even modes
-   kParamBrightness,        // amplitude tilt across modes
-   // --- Appended (CLAP ids are indexes, so new params go last) ---
+   // --- ModalBank: timbre (Strike Position and Brightness were removed: they moved the loudness
+   //     peak, which is Focus's job; the bank's strike-position weighting is off, brightness 0) ---
+   kParamFocus,             // 0 = amplitude 1/sqrt(ratio), 1 = a Gaussian loudness curve (replaced the damp bell)
+   kParamFocusCentre,       // the loudness peak, octaves above the note (0 = the fundamental loudest)
+   kParamFocusWidth,        // the loudness curve's width, octaves
+   // --- Appended (CLAP ids are indexes, so new params go last once released; the cloud's params
+   //     were put in panel order above while StruckGaussian was unreleased) ---
    kParamMpe,               // MPE input, lower zone: member bend ±48 + the master channel's bend
    // --- Expression (appended): what pressure and timbre (CC74) do; all 0 = no effect ---
    kParamPressToDecay,      // pressure → decay time, octaves of T60 at full pressure (+ rings longer)
    kParamTimbreToTilt,      // timbre → damping tilt, added to Damp at full timbre (+ darker tail)
-   kParamTimbreToPos,       // timbre → strike position, added at full timbre (read at the strike)
    kParamCount
 };
 
@@ -71,38 +74,26 @@ static constexpr ParamSpec kParams[kParamCount] = {
    {"Contact",    "contact",  "",    0.0f,   1.0f,   0.0f,  false, true },
    // ModalBank: object
    {"Pitch",      "pitch",    "oct", -4.0f,  4.0f,   0.0f,  false, false},
-   {"Material",   "material", "",    0.0f,  25.0f,   1.0f,  false, true },
-   {"Modes",      "modes",    "",    1.0f,  64.0f,  64.0f,  false, true },
+   {"Centre",     "centre",   "oct", -2.0f,  4.0f,   0.0f,  false, false},
+   {"Width",      "width",    "oct", 0.002f, 3.0f,   0.5f,  true,  false},
+   {"Modes",      "modes",    "",    1.0f,  64.0f,  16.0f,  false, true },
+   {"Seed",       "seed",     "",    1.0f, 100.0f,   1.0f,  false, true },
+   {"Reseed",     "reseed",   "",    0.0f,   1.0f,   0.0f,  false, true },
+   {"Keep Fund",  "keepFund", "",    0.0f,   1.0f,   1.0f,  false, true },
    {"Stretch",    "stretch",  "",    0.0f,  19.0f,   9.0f,  false, true },
    // ModalBank: decay
    {"Decay",      "decay",    "s",   0.02f, 60.0f,   2.0f,  true,  false},
    {"Damp",       "dampTilt", "",    0.0f,   3.0f,   0.9f,  false, false},
-   {"Bell Amt",   "bellAmt",  "oct", -4.0f,  4.0f,   0.0f,  false, false},
-   {"Bell Ctr",   "bellCtr",  "oct", 0.0f,   7.0f,   2.0f,  false, false},
-   {"Bell Wid",   "bellWid",  "oct", 0.1f,   4.0f,   0.4f,  false, false},
    // ModalBank: timbre
-   {"Strike Pos", "strkPos",  "",    0.0f,   1.0f,   0.25f, false, false},
-   {"Brightness", "bright",   "",    -1.0f,  1.0f,   0.0f,  false, false},
+   {"Focus",      "focus",    "",    0.0f,   1.0f,   0.0f,  false, false},
+   {"Focus Ctr",  "focusCtr", "oct", -2.0f,  4.0f,   0.0f,  false, false},
+   {"Focus Wid",  "focusWid", "oct", 0.05f,  3.0f,   0.5f,  true,  false},
    // Appended
    {"MPE",        "mpe",      "",    0.0f,   1.0f,   0.0f,  false, true },
    // Expression
    {"Press>Decay", "prsDecay", "oct", -4.0f, 4.0f,   0.0f,  false, false},
    {"Tmb>Tilt",   "tmbTilt",  "",    -3.0f,  3.0f,   0.0f,  false, false},
-   {"Tmb>Pos",    "tmbPos",   "",    -1.0f,  1.0f,   0.0f,  false, false},
 };
-
-// Material picker labels (order matches ModalBankMaterial in pm_params.h). Null-terminated so the
-// CLAP params extension and the UI dropdown can walk it without a separate count.
-static constexpr const char* kMaterialNames[] = {
-   "String", "Bar", "Tuned Bar", "Membrane", "Open Tube", "Closed Tube", "Tine", "Bell",
-   "Guitar Body", "Violin Body", "Soundboard", "Generic Body",
-   "Harmonic", "Octave", "Fibonacci", "Prime", "Triangular", "Tetrahedral", "Partition",
-   "Golden", "Silver", "Piano", "Power", "Sqrt", "Box 3D", "Harmonic #",
-   nullptr,
-};
-static_assert(sizeof(kMaterialNames) / sizeof(kMaterialNames[0]) - 1
-                 == std::size_t(kParams[kParamMaterial].max) + 1,
-              "kMaterialNames and the Material parameter's range disagree");
 
 // kParams is indexed by ParamIndex, so a swapped pair of rows compiles fine and silently cross-wires
 // two controls (PlainOldSynth's Effect Mix and Spread once did exactly that). The table is small, so
@@ -118,13 +109,15 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
               && symbolIs(kParamStrikeType, "strkType") && symbolIs(kParamHardness, "hardness")
               && symbolIs(kParamVelToLevel, "velLevel") && symbolIs(kParamVelToHardness, "velHard")
               && symbolIs(kParamContactMode, "contact") && symbolIs(kParamPitch, "pitch")
-              && symbolIs(kParamMaterial, "material") && symbolIs(kParamModeCount, "modes")
+              && symbolIs(kParamCloudCentre, "centre") && symbolIs(kParamCloudWidth, "width")
+              && symbolIs(kParamModeCount, "modes") && symbolIs(kParamCloudSeed, "seed")
+              && symbolIs(kParamCloudReseed, "reseed") && symbolIs(kParamCloudKeepFund, "keepFund")
               && symbolIs(kParamStretch, "stretch") && symbolIs(kParamDecayT60, "decay")
-              && symbolIs(kParamDampTilt, "dampTilt") && symbolIs(kParamDampBellAmount, "bellAmt")
-              && symbolIs(kParamDampBellCentre, "bellCtr") && symbolIs(kParamDampBellWidth, "bellWid")
-              && symbolIs(kParamStrikePosition, "strkPos") && symbolIs(kParamBrightness, "bright")
+              && symbolIs(kParamDampTilt, "dampTilt")
+              && symbolIs(kParamFocus, "focus") && symbolIs(kParamFocusCentre, "focusCtr")
+              && symbolIs(kParamFocusWidth, "focusWid")
               && symbolIs(kParamMpe, "mpe") && symbolIs(kParamPressToDecay, "prsDecay")
-              && symbolIs(kParamTimbreToTilt, "tmbTilt") && symbolIs(kParamTimbreToPos, "tmbPos"),
+              && symbolIs(kParamTimbreToTilt, "tmbTilt"),
               "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------
@@ -136,6 +129,8 @@ static constexpr const char* kVoiceModeChoices[]   = { "Mono", "Poly 10", "Poly 
 static constexpr const char* kStrikeTypeChoices[]  = { "Mallet", "Noise",   nullptr };
 static constexpr const char* kContactModeChoices[] = { "Note-Rel", "Wall-Clk", nullptr };
 static constexpr const char* kMpeChoices[]         = { "Off", "On",         nullptr };
+static constexpr const char* kReseedChoices[]      = { "Off", "Per Note",   nullptr };
+static constexpr const char* kKeepFundChoices[]    = { "No",  "Yes",        nullptr };
 
 inline const char* const* choicesFor(uint32_t index)
 {
@@ -144,7 +139,8 @@ inline const char* const* choicesFor(uint32_t index)
    case kParamStrikeType:  return kStrikeTypeChoices;
    case kParamContactMode: return kContactModeChoices;
    case kParamMpe:         return kMpeChoices;
-   case kParamMaterial:    return kMaterialNames;
+   case kParamCloudReseed: return kReseedChoices;
+   case kParamCloudKeepFund: return kKeepFundChoices;
    default:                return nullptr;
    }
 }

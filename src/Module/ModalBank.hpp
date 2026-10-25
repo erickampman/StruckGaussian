@@ -66,6 +66,10 @@ public:
     void setDampBellCentre(float octaves);   // octaves above the fundamental
     void setDampBellWidth(float octaves);    // Gaussian sigma, in octaves
     void setStrikePosition(float p);    // 0..1; 0.5 cancels even modes
+    // Off: every mode gets gain 1 from the strike position. The |sin(pi*ratio*p)|
+    // law assumes a string's mode shapes, which a mode cloud doesn't have.
+    // (StruckGaussian addition; the other copies of this file lack it.)
+    void setPositionWeighting(bool on);
     void setSpread(float s);            // 0 = mono, 1 = modes spread L/R
 
     // --- audio --------------------------------------------------------------
@@ -85,6 +89,13 @@ public:
     // than recomputed from the parameters. That makes it a genuine check: it
     // reports what the resonator is actually doing, including any clamping.
     float modeT60(int i) const;
+
+    // Peak amplitude mode i rings at after a unit impulse, energy normalisation
+    // included; 0 for a muted mode. Every mode starts in phase at a strike, so
+    // the sum of these is the bank's in-phase peak. Recovered from the gain and
+    // the frequency, like modeT60, so it reports what the filter does.
+    // (StruckGaussian addition; the other copies of this file lack it.)
+    float modeAmplitude(int i) const;
 
 private:
     void recomputeIfDirty();
@@ -115,6 +126,7 @@ private:
     float  mDampBellCentre;
     float  mDampBellWidth;
     float  mStrikePos;
+    bool   mPositionWeighting;
     float  mSpread;
 
     bool   mDirty;

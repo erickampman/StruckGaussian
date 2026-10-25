@@ -21,21 +21,22 @@
       },
       "ModalBank": {
         "pitch": "0.000000",
-        "material": "1",
-        "modeCount": "64",
+        "cloudCentre": "0.000000",
+        "cloudWidth": "0.500000",
+        "modeCount": "16",
+        "cloudSeed": "1",
+        "cloudReseed": "0",
+        "cloudKeepFund": "1",
         "stretch": "9",
         "decayT60": "2.000000",
         "dampTilt": "0.900000",
-        "dampBellAmount": "0.000000",
-        "dampBellCentre": "2.000000",
-        "dampBellWidth": "0.400000",
-        "strikePosition": "0.250000",
-        "brightness": "0.000000"
+        "cloudFocus": "0.000000",
+        "cloudFocusCentre": "0.000000",
+        "cloudFocusWidth": "0.500000"
       },
       "Expression": {
         "pressToDecay": "0.000000",
-        "timbreToTilt": "0.000000",
-        "timbreToPos": "0.000000"
+        "timbreToTilt": "0.000000"
       }
     }
   }

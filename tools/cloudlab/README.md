@@ -15,6 +15,13 @@ a generator: a stable `ModalMode` buffer, `setMaterial`, `invalidate`. The strik
 note-relative Hann contact. Everything else is at the plugin's defaults: T60 2 s, Damp Tilt 0.9,
 Strike Position 0.25, Brightness 0, Spread 0.3, and Hardness 0.3 at velocity 1 (effective 0.15).
 
+In StruckGaussian the cloud is the plugin's object: the generator is `src/Module/ModalCloud.hpp`, which
+`cloudlab` now uses too, and the plugin trims the strike by its in-phase peak (`trim=1` here). Since
+then the generator also recentres each cloud on its centre (Width no longer moves it), clouds are
+rendered without strike-position weighting (`pos` acts on `mat=` tables only), and `focus`, `fctr`
+and `fwid` set the loudness curve. The renders and measurements below were made in StruckSynth
+before all of that, so today's clouds differ from them.
+
 ## Build and run
 
 From this folder:

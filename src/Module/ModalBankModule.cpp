@@ -5,68 +5,99 @@
 #include "ModalBankModule.hpp"
 #include <cmath>
 #include "ModalBank.hpp"          // the framework-free core
-#include "ModalGenerators.hpp"    // procedural mode series
+#include "ModalCloud.hpp"         // the Gaussian mode cloud
 #include "PitchConverter.hpp"
+#include "pm_midi.h"
 
 #include <algorithm>
+#include <atomic>
 
-// Module state is the core instance plus, for procedural materials, a buffer
-// holding the generated mode table. That buffer is filled on demand and its
-// pointer handed to the core; because the pointer is stable across generators,
-// switching between two generators needs bank.invalidate() to force recompute.
+// StruckGaussian's object is always a mode cloud (ModalCloud.hpp). Its modes are
+// generated into the state's buffer and that buffer handed to the core; the
+// pointer never changes, so a regenerated cloud needs bank.invalidate().
+//
+// Trim. The bank normalises energy, not peak, and every mode starts in phase at
+// a strike, so a cloud of near-equal modes hits 6-8 dB harder than a table such
+// as Bar, and more modes add more click (tools/cloudlab). The strike is scaled
+// by kTrimRef / (the bank's in-phase peak), so Modes, Width and Centre leave the
+// level of the hit where Bar's is (Focus included: a narrow loudness peak would
+// otherwise hit softer). It scales the INPUT, so a trim that moves
+// (Strike Position, a glide) changes the next strike, never a ringing note.
 struct ModalBankState {
     ModalBank     bank;
-    ModalMode     genBuffer[ModalBank::kMaxModes];
-    ModalMaterial genMaterial{ nullptr, 0, "Gen" };
-    int           lastMaterial = -1;   // which material index genBuffer holds
+    ModalMode     cloud[ModalBank::kMaxModes];
+    ModalMaterial cloudMaterial{ cloud, 0, "Cloud" };
+
+    // what the cloud in the buffer was generated from; count 0 = nothing yet
+    int      count = 0;
+    float    centre = 0.0f, width = 0.0f;
+    float    focus = 0.0f, focusCentre = 0.0f, focusWidth = 0.5f;
+    uint32_t seed = 0;
+    bool     keepFund = true;
+
+    bool     noteOn = false;     // a note-on since the last block: Reseed draws here
+    uint32_t noteSeed = 1;       // the seed this note plays, with Reseed on
+
+    float    trim = 1.0f;
+    float    trimPos = -1.0f, trimBright = 0.0f, trimStretch = 0.0f, trimHz = 0.0f;
+    bool     trimDirty = true;
 };
 
-// Piano B and Power k shaping parameters. No AU parameter is exposed for these
-// yet, so the module uses the same sensible defaults ModeTests opens on.
-static constexpr float kPianoB = 0.0003f;   // middle of the keyboard
-static constexpr float kPowerK = 1.5f;      // closely matches a free-free bar
+// The in-phase peak of the Bar table at the plugin's defaults (C4, Strike
+// Position 0.25, Brightness 0, Stretch 0), from ModalBank::modeAmplitude: the
+// level a trimmed cloud hits at.
+static constexpr float kTrimRef = 2.1181f;
 
-// Select the material for this block. Static tables come straight from
-// kModalMaterials; generators are (re)filled into the state buffer only when
-// the selected material actually changes, then the bank is invalidated so the
-// stable buffer pointer is not mistaken for unchanged contents.
-static void selectMaterial(Module* module, ModalBankState* st, int materialIdx)
+// A new seed for every Reseed note, shared by all voices so two voices struck
+// together draw different clouds.
+static uint32_t nextNoteSeed(uint32_t base)
 {
-    materialIdx = std::clamp(materialIdx, 0, (int)ModalBankMaterialCount - 1);
+    static std::atomic<uint32_t> counter{0};
+    uint32_t x = base * 0x9E3779B1u + (++counter) * 0x85EBCA77u;
+    x ^= x >> 16; x *= 0x7FEB352Du; x ^= x >> 15;       // mix, so neighbours differ
+    return x;
+}
 
-    if (materialIdx < (int)MODAL_BANK_FIRST_GENERATOR) {
-        st->bank.setMaterial(kModalMaterials[materialIdx]);
-        st->lastMaterial = materialIdx;
-        return;
-    }
+// Regenerate the cloud when anything it is drawn from has changed. Returns true
+// if it did.
+static bool updateCloud(Module* module, ModalBankState* st)
+{
+    const int   count    = std::clamp(module->getParamValueAsInt(ModalBankParamItemModeCount), 1, ModalBank::kMaxModes);
+    const float centre   = module->getParamValue(ModalBankParamItemCloudCentre);
+    const float width    = std::max(module->getParamValue(ModalBankParamItemCloudWidth), 0.0f);
+    const bool  keepFund = module->getParamValue(ModalBankParamItemCloudKeepFund) >= 0.5f;
+    const bool  reseed   = module->getParamValue(ModalBankParamItemCloudReseed) >= 0.5f;
+    const uint32_t base  = (uint32_t)std::max(1, module->getParamValueAsInt(ModalBankParamItemCloudSeed));
+    const float focus    = std::clamp(module->getParamValue(ModalBankParamItemCloudFocus), 0.0f, 1.0f);
+    const float fCentre  = module->getParamValue(ModalBankParamItemCloudFocusCentre);
+    const float fWidth   = module->getParamValue(ModalBankParamItemCloudFocusWidth);
 
-    if (materialIdx != st->lastMaterial) {
-        const ModalSeriesID series =
-            (ModalSeriesID)(materialIdx - MODAL_BANK_FIRST_GENERATOR);
-        const float param = (series == ModalSeriesPiano) ? kPianoB
-                          : (series == ModalSeriesPower) ? kPowerK : 0.0f;
-        const int n = generateModalSeries(series, param,
-                                          ModalBank::kMaxModes,
-                                          st->genBuffer, ModalBank::kMaxModes);
-        st->genMaterial.modes = st->genBuffer;
-        st->genMaterial.count = n;
-        st->lastMaterial = materialIdx;
+    // Reseed off: the seed itself, so a preset's cloud is the one cloudlab draws.
+    if (reseed && st->noteOn) st->noteSeed = nextNoteSeed(base);
+    st->noteOn = false;
+    const uint32_t seed = reseed ? st->noteSeed : base;
 
-        // The buffer pointer handed to the core is stable across generators, so
-        // a generator->generator switch would otherwise look unchanged. Force it
-        // only here, on the block the material actually changed — not every
-        // block, which would recompute all coefficients continuously.
-        st->bank.setMaterial(st->genMaterial);
-        st->bank.invalidate();
-    } else {
-        st->bank.setMaterial(st->genMaterial);   // no-op if already selected
-    }
+    if (count == st->count && centre == st->centre && width == st->width
+        && seed == st->seed && keepFund == st->keepFund
+        && focus == st->focus && fCentre == st->focusCentre && fWidth == st->focusWidth)
+        return false;
+
+    st->count = count; st->centre = centre; st->width = width; st->seed = seed; st->keepFund = keepFund;
+    st->focus = focus; st->focusCentre = fCentre; st->focusWidth = fWidth;
+    st->cloudMaterial.count = ModalCloud::generate(count, centre, width, seed, keepFund,
+                                                   st->cloud, ModalBank::kMaxModes,
+                                                   focus, fCentre, fWidth);
+    st->bank.setMaterial(st->cloudMaterial);
+    st->bank.setModeCount(st->cloudMaterial.count);
+    st->bank.invalidate();
+    return true;
 }
 
 const void InitModalBankModule(uint32_t /*count*/, Module* module)
 {
     auto* st = new ModalBankState();
     st->bank.setSampleRate(module->mSampleRate);
+    st->bank.setPositionWeighting(false);   // a cloud has no string's mode shapes (ModalBank.hpp)
     module->state = st;
 }
 
@@ -74,6 +105,13 @@ const void DeinitModalBankModule(Module* module)
 {
     delete static_cast<ModalBankState*>(module->state);
     module->state = nullptr;
+}
+
+void MIDIModalBankModule(const pm::UmpMessage& message, Module* module)
+{
+    if (auto* st = static_cast<ModalBankState*>(module->state)) {
+        if (pm::isNoteOn(message)) st->noteOn = true;
+    }
 }
 
 const void ResetModalBankModule(Module* module)
@@ -126,8 +164,7 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
     bank.setFundamental((float)module->pitchConverter->pitchToFrequency(octaves));
 
     // --- object ------------------------------------------------------------
-    selectMaterial(module, st, module->getParamValueAsInt(ModalBankParamItemMaterial));
-    bank.setModeCount(module->getParamValueAsInt(ModalBankParamItemModeCount));
+    if (updateCloud(module, st)) st->trimDirty = true;
     // Stretch is an INDEX into the shared value table, not a raw float.
     bank.setStretch(kModalStretchValues[
         std::clamp(module->getParamValueAsInt(ModalBankParamItemStretch),
@@ -172,7 +209,37 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
 
     float* outL = module->output.first->data;
     float* outR = module->output.second->data;
-    bank.processBlock(exc, outL, outR, (int)count);
+
+    // Trim, recomputed only when something that moves the in-phase peak has changed.
+    {
+        const float pos = module->getParamValue(ModalBankParamItemStrikePosition) + strikeMod;
+        const float bright = module->getParamValue(ModalBankParamItemBrightness) + brightMod;
+        const float stretch = kModalStretchValues[
+            std::clamp(module->getParamValueAsInt(ModalBankParamItemStretch), 0, kModalStretchCount - 1)];
+        const float hz = bank.modeFrequency(0);
+        if (st->trimDirty || pos != st->trimPos || bright != st->trimBright
+            || stretch != st->trimStretch || hz != st->trimHz) {
+            bank.prepare();
+            float peak = 0.0f;
+            for (int i = 0; i < bank.activeModes(); ++i) peak += bank.modeAmplitude(i);
+            st->trim = (peak > 1e-6f) ? kTrimRef / peak : 1.0f;
+            st->trimPos = pos; st->trimBright = bright; st->trimStretch = stretch; st->trimHz = hz;
+            st->trimDirty = false;
+        }
+    }
+
+    if (exc == nullptr) {
+        bank.processBlock(nullptr, outL, outR, (int)count);
+    } else {
+        // The trimmed strike, in chunks so no buffer has to be sized to the host's block.
+        float trimmed[256];
+        for (uint32_t done = 0; done < count; ) {
+            const uint32_t n = std::min<uint32_t>(256, count - done);
+            for (uint32_t i = 0; i < n; ++i) trimmed[i] = exc[done + i] * st->trim;
+            bank.processBlock(trimmed, outL + done, outR + done, (int)n);
+            done += n;
+        }
+    }
 
     const float level = module->getParamValue(ModalBankParamItemLevel);
     if (level != 1.0f) {

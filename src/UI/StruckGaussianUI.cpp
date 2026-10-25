@@ -30,16 +30,15 @@
 #include "PresetDump.hpp"         // dev-only JSON patch dumper (no-op unless STRUCKGAUSSIAN_PRESET_DUMP=1)
 
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
-#include "ModalGenerators.hpp"  // procedural mode series
-#include "ModalMaterials.hpp"   // static material tables + kModalStretchValues
+#include "ModalCloud.hpp"       // the Gaussian mode cloud, as ModalBankModule draws it
+#include "ModalMaterials.hpp"   // kModalStretchValues
 #include "CPPTypes.hpp"         // DEFAULT_SAMPLE_RATE (the UIExporter's nominal rate below)
-#include "pm_params.h"          // ModalBankMaterial / MODAL_BANK_FIRST_GENERATOR
 #include "StruckGaussianParams.h"
 #include "plugin_gui.h"         // the C seam to src/plugin.cpp (the raw CLAP plugin)
 
 START_NAMESPACE_DISTRHO
 
-using namespace struckgaussian;  // params (kParams, ParamIndex, kMaterialNames)
+using namespace struckgaussian;  // params (kParams, ParamIndex)
 
 using DGL_NAMESPACE::Color;
 using DGL_NAMESPACE::Dropdown;
@@ -60,25 +59,30 @@ static inline Color colExpression() { return Color(96, 186, 196); }
 
 // --------------------------------------------------------------------------------------------
 // ModalSpectrum — draws the current bank as vertical bars: x = mode frequency (log), height =
-// relative decay time (T60), so damp-tilt and the damp-bell visibly reshape the profile. It owns
-// a ModalBank core and reconfigures it from the modal params on every relevant change.
+// the amplitude each mode starts at (Focus included), opacity =
+// relative decay time (T60), so a long-ringing mode draws more solid. A thin line marks the
+// fundamental, since a cloud puts modes below it as well as above. It owns a
+// ModalBank core and reconfigures it from the modal params on every relevant change.
 class ModalSpectrum : public NanoSubWidget
 {
 public:
     explicit ModalSpectrum(Widget* parent) : NanoSubWidget(parent)
     {
         fBank.setSampleRate(48000.0);
+        fHasFont = loadSharedResources(); // DPF's bundled DejaVu Sans for this NanoVG context
         recompute();
     }
 
     // Push the modal params the visual depends on, then recompute the mode layout.
-    void update(int material, int modes, int stretchIdx, float pitchOct,
-                float decayT60, float dampTilt, float brightness,
-                float bellAmt, float bellCtr, float bellWid)
+    // With Reseed on every note draws its own cloud; this shows the Seed's.
+    void update(float centre, float width, int seed, bool keepFund, int modes, int stretchIdx,
+                float pitchOct, float decayT60, float dampTilt,
+                float focus, float focusCtr, float focusWid)
     {
-        fMaterial = material; fModes = modes; fStretchIdx = stretchIdx; fPitch = pitchOct;
-        fDecayT60 = decayT60; fDampTilt = dampTilt; fBrightness = brightness;
-        fBellAmt = bellAmt; fBellCtr = bellCtr; fBellWid = bellWid;
+        fCentre = centre; fWidth = width; fSeed = seed; fKeepFund = keepFund;
+        fModes = modes; fStretchIdx = stretchIdx; fPitch = pitchOct;
+        fDecayT60 = decayT60; fDampTilt = dampTilt;
+        fFocus = focus; fFocusCtr = focusCtr; fFocusWid = focusWid;
         recompute();
         repaint();
     }
@@ -98,9 +102,27 @@ protected:
         const float plotH = h - padTop - padBot;
         if (fCount <= 0 || plotH <= 4) return;
 
-        // Log-frequency axis spanning the mode range (with a little headroom).
-        const float fLo = std::log2(std::max(20.0f, fMinFreq * 0.9f));
-        const float fHi = std::log2(std::max(fLo + 1.0f, fMaxFreq * 1.1f));
+        // Log-frequency axis centred on the fundamental, so the f0 line stays put while Width or Centre
+        // move the modes: it reaches the furthest mode on either side (at least an octave each way, with
+        // a little headroom).
+        const float c    = std::log2(fF0);
+        const float half = 1.1f * std::max({ 1.0f, std::log2(fMaxFreq) - c, c - std::log2(fMinFreq) });
+        const float fLo  = c - half, fHi = c + half;
+
+        // The fundamental: a thin line under the bars, labelled at the top.
+        {
+            const float px = x0 + (std::log2(fF0) - fLo) / (fHi - fLo) * (x1 - x0);
+            beginPath(); moveTo(px, padTop); lineTo(px, y1 + 3);
+            strokeColor(Color(150, 154, 162, 0.55f)); strokeWidth(1.0f); stroke();
+            if (fHasFont)
+            {
+                fontFace(NANOVG_DEJAVU_SANS_TTF);
+                fontSize(std::clamp(h * 0.075f, 9.0f, 13.0f));
+                textAlign(ALIGN_LEFT | ALIGN_TOP);
+                fillColor(Color(150, 154, 162));
+                text(px + 3, padTop - 2, "f0", nullptr);
+            }
+        }
 
         // Baseline.
         beginPath(); moveTo(x0, y1 + 3); lineTo(x1, y1 + 3);
@@ -110,11 +132,12 @@ protected:
         {
             const float fx  = (std::log2(fFreq[i]) - fLo) / (fHi - fLo);
             const float px  = x0 + fx * (x1 - x0);
-            const float mag = std::clamp(fT60[i] / fT60Max, 0.02f, 1.0f);
-            const float bh  = mag * plotH;
+            const float amp = std::clamp(fAmp[i] / fAmpMax, 0.02f, 1.0f);
+            const float dec = std::clamp(fT60[i] / fT60Max, 0.0f, 1.0f);
+            const float bh  = amp * plotH;
 
-            // Longer-ringing modes draw more opaque; the cap dot keeps short modes visible.
-            Color bar = fAccent; bar.alpha = 0.35f + 0.55f * mag;
+            // Longer-ringing modes draw more opaque; the cap dot keeps quiet modes visible.
+            Color bar = fAccent; bar.alpha = 0.35f + 0.55f * dec;
             beginPath(); rect(px - 1.5f, y1 - bh, 3.0f, bh);
             fillColor(bar); fill();
             beginPath(); circle(px, y1 - bh, 2.2f); fillColor(Color(240, 244, 248)); fill();
@@ -126,24 +149,28 @@ private:
     {
         // Fundamental for the display only: a nominal C3 transposed by the Pitch offset.
         const float f0 = 130.81f * std::exp2(fPitch);
+        fF0 = f0;
         fBank.setFundamental(f0);
-        fBank.setModeCount(fModes);
         fBank.setStretch(kModalStretchValues[std::clamp(fStretchIdx, 0, kModalStretchCount - 1)]);
         fBank.setDecayT60(fDecayT60);
         fBank.setDampTilt(fDampTilt);
-        fBank.setBrightness(fBrightness);
-        fBank.setDampBellAmount(fBellAmt);
-        fBank.setDampBellCentre(fBellCtr);
-        fBank.setDampBellWidth(fBellWid);
-        selectMaterial(fMaterial);
+        fBank.setPositionWeighting(false);   // as ModalBankModule
+        fCloud.count = ModalCloud::generate(fModes, fCentre, fWidth, (uint32_t)std::max(1, fSeed),
+                                            fKeepFund, fCloudModes, ModalBank::kMaxModes,
+                                            fFocus, fFocusCtr, fFocusWid);
+        fBank.setMaterial(fCloud);
+        fBank.setModeCount(fCloud.count);
+        fBank.invalidate();
         fBank.prepare();
 
         fCount = std::min(fBank.activeModes(), (int)ModalBank::kMaxModes);
-        fMinFreq = 1e9f; fMaxFreq = 1.0f; fT60Max = 1e-4f;
+        fMinFreq = 1e9f; fMaxFreq = 1.0f; fT60Max = 1e-4f; fAmpMax = 1e-6f;
         for (int i = 0; i < fCount; ++i)
         {
             fFreq[i] = fBank.modeFrequency(i);
             fT60[i]  = fBank.modeT60(i);
+            fAmp[i]  = fBank.modeAmplitude(i);
+            fAmpMax  = std::max(fAmpMax, fAmp[i]);
             fMinFreq = std::min(fMinFreq, fFreq[i]);
             fMaxFreq = std::max(fMaxFreq, fFreq[i]);
             fT60Max  = std::max(fT60Max, fT60[i]);
@@ -151,36 +178,25 @@ private:
         if (fCount <= 0) { fMinFreq = 100.0f; fMaxFreq = 1000.0f; }
     }
 
-    // Mirror of ModalBankModule's selectMaterial: static tables vs procedural generators.
-    void selectMaterial(int idx)
-    {
-        idx = std::clamp(idx, 0, (int)ModalBankMaterialCount - 1);
-        if (idx < (int)MODAL_BANK_FIRST_GENERATOR) { fBank.setMaterial(kModalMaterials[idx]); return; }
-        const ModalSeriesID series = (ModalSeriesID)(idx - MODAL_BANK_FIRST_GENERATOR);
-        const float param = (series == ModalSeriesPiano) ? 0.0003f
-                          : (series == ModalSeriesPower) ? 1.5f : 0.0f;
-        const int n = generateModalSeries(series, param, ModalBank::kMaxModes,
-                                          fGenBuffer, ModalBank::kMaxModes);
-        fGenMaterial.modes = fGenBuffer;
-        fGenMaterial.count = n;
-        fGenMaterial.name  = "Gen";
-        fBank.setMaterial(fGenMaterial);
-        fBank.invalidate();
-    }
-
     ModalBank     fBank;
-    ModalMode     fGenBuffer[ModalBank::kMaxModes];
-    ModalMaterial fGenMaterial { nullptr, 0, "Gen" };
+    ModalMode     fCloudModes[ModalBank::kMaxModes];
+    ModalMaterial fCloud { fCloudModes, 0, "Cloud" };
     Color         fAccent = colObject();
 
-    int   fMaterial = 1, fModes = 64, fStretchIdx = 9;
-    float fPitch = 0.0f, fDecayT60 = 2.0f, fDampTilt = 0.9f, fBrightness = 0.0f;
-    float fBellAmt = 0.0f, fBellCtr = 2.0f, fBellWid = 0.4f;
+    float fCentre = 0.0f, fWidth = 0.5f;
+    int   fSeed = 1;
+    bool  fKeepFund = true;
+    int   fModes = 16, fStretchIdx = 9;
+    float fPitch = 0.0f, fDecayT60 = 2.0f, fDampTilt = 0.9f;
+    float fFocus = 0.0f, fFocusCtr = 0.0f, fFocusWid = 0.5f;
 
     int   fCount = 0;
     float fFreq[ModalBank::kMaxModes] = {};
     float fT60 [ModalBank::kMaxModes] = {};
-    float fMinFreq = 100.0f, fMaxFreq = 1000.0f, fT60Max = 1.0f;
+    float fAmp [ModalBank::kMaxModes] = {};
+    float fMinFreq = 100.0f, fMaxFreq = 1000.0f, fT60Max = 1.0f, fAmpMax = 1.0f;
+    float fF0 = 130.81f;
+    bool  fHasFont = false;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModalSpectrum)
 };
@@ -371,7 +387,7 @@ protected:
             fillColor(Color(224, 190, 150));
             text(fTitleX, 20 * s, "StruckGaussian", nullptr);
             fillColor(Color(150, 154, 162)); fontSize(12 * s);
-            text(fTitleX + 132 * s, 22 * s, "modal synthesis", nullptr);
+            text(fTitleX + 172 * s, 22 * s, "modal synthesis, Gaussian modes", nullptr);
         }
     }
     void onResize(const ResizeEvent& ev) override { UI::onResize(ev); layout(); }
@@ -501,12 +517,12 @@ private:
         case kParamStrikeType: case kParamHardness: case kParamVelToLevel:
         case kParamVelToHardness: case kParamContactMode:
             return fStrikeGroup.get();
-        case kParamPitch: case kParamMaterial: case kParamModeCount: case kParamStretch:
+        case kParamPitch: case kParamCloudCentre: case kParamCloudWidth: case kParamModeCount:
+        case kParamCloudSeed: case kParamCloudReseed: case kParamCloudKeepFund: case kParamStretch:
             return fObjectGroup.get();
-        case kParamDecayT60: case kParamDampTilt: case kParamDampBellAmount:
-        case kParamDampBellCentre: case kParamDampBellWidth:
+        case kParamDecayT60: case kParamDampTilt:
             return fDecayGroup.get();
-        case kParamPressToDecay: case kParamTimbreToTilt: case kParamTimbreToPos:
+        case kParamPressToDecay: case kParamTimbreToTilt:
             return fExpressionGroup.get();
         default:
             return fOutputGroup.get(); // strikePos, brightness, mix
@@ -522,12 +538,12 @@ private:
         case kParamStrikeType: case kParamHardness: case kParamVelToLevel:
         case kParamVelToHardness: case kParamContactMode:
             return colStrike();
-        case kParamPitch: case kParamMaterial: case kParamModeCount: case kParamStretch:
+        case kParamPitch: case kParamCloudCentre: case kParamCloudWidth: case kParamModeCount:
+        case kParamCloudSeed: case kParamCloudReseed: case kParamCloudKeepFund: case kParamStretch:
             return colObject();
-        case kParamDecayT60: case kParamDampTilt: case kParamDampBellAmount:
-        case kParamDampBellCentre: case kParamDampBellWidth:
+        case kParamDecayT60: case kParamDampTilt:
             return colDecay();
-        case kParamPressToDecay: case kParamTimbreToTilt: case kParamTimbreToPos:
+        case kParamPressToDecay: case kParamTimbreToTilt:
             return colExpression();
         default:
             return colOutput();
@@ -546,21 +562,23 @@ private:
 
     static bool affectsSpectrum(uint32_t i)
     {
-        return i == kParamMaterial || i == kParamModeCount || i == kParamStretch
+        return i == kParamCloudCentre || i == kParamCloudWidth || i == kParamCloudSeed
+            || i == kParamCloudKeepFund || i == kParamModeCount || i == kParamStretch
             || i == kParamPitch || i == kParamDecayT60 || i == kParamDampTilt
-            || i == kParamBrightness || i == kParamDampBellAmount
-            || i == kParamDampBellCentre || i == kParamDampBellWidth;
+            || i == kParamFocus
+            || i == kParamFocusCentre || i == kParamFocusWidth;
     }
 
     void pushSpectrum()
     {
-        fSpectrum->update(static_cast<int>(fValues[kParamMaterial] + 0.5f),
+        fSpectrum->update(fValues[kParamCloudCentre], fValues[kParamCloudWidth],
+                          static_cast<int>(fValues[kParamCloudSeed] + 0.5f),
+                          fValues[kParamCloudKeepFund] >= 0.5f,
                           static_cast<int>(fValues[kParamModeCount] + 0.5f),
                           static_cast<int>(fValues[kParamStretch] + 0.5f),
                           fValues[kParamPitch], fValues[kParamDecayT60],
-                          fValues[kParamDampTilt], fValues[kParamBrightness],
-                          fValues[kParamDampBellAmount], fValues[kParamDampBellCentre],
-                          fValues[kParamDampBellWidth]);
+                          fValues[kParamDampTilt], fValues[kParamFocus],
+                          fValues[kParamFocusCentre], fValues[kParamFocusWidth]);
     }
 
     static std::function<std::string(float)> formatterFor(uint32_t i)
@@ -568,11 +586,13 @@ private:
         const std::string u = kParams[i].unit;
         const bool integer = kParams[i].integer;
         const bool isTime  = (u == "s");
-        return [u, integer, isTime](float v) {
+        const bool fine    = (i == kParamCloudWidth);   // a unison-narrow cloud is 0.005 oct
+        return [u, integer, isTime, fine](float v) {
             char b[32];
             if (integer)      std::snprintf(b, sizeof(b), "%d", static_cast<int>(v + 0.5f));
             else if (isTime)  v < 1.0f ? std::snprintf(b, sizeof(b), "%.0f ms", v * 1000.0f)
                                        : std::snprintf(b, sizeof(b), "%.2f s", v);
+            else if (fine && v < 0.1f) std::snprintf(b, sizeof(b), "%.3f %s", v, u.c_str());
             else if (!u.empty()) std::snprintf(b, sizeof(b), "%.2f %s", v, u.c_str());
             else              std::snprintf(b, sizeof(b), "%.2f", v);
             return std::string(b);

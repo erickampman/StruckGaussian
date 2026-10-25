@@ -359,7 +359,7 @@ enum ModalBankParamItem : NSUInteger {
    // Object
    ModalBankParamItemPitch,          // transpose offset (octaves), ADDED to input
    ModalBankParamItemPitchModLevel,  // scales PitchInput (1 = unity tracking, 0 = fixed pitch)
-   ModalBankParamItemMaterial,       // indexed; see ModalBankMaterial
+   ModalBankParamItemCloudCentre,    // octaves above the fundamental: the mode cloud's centre (ModalCloud.hpp)
    ModalBankParamItemModeCount,      // 1..64; clamps to the table's depth
    ModalBankParamItemStretch,        // INDEX into kModalStretchValues (inharmonicity)
    // Decay
@@ -385,6 +385,17 @@ enum ModalBankParamItem : NSUInteger {
    // Damping-tilt modulation (appended)
    ModalBankParamItemDampTiltModInput, // connection: added to DampTilt, scaled by the level below
    ModalBankParamItemDampTiltModLevel,
+   // The rest of the mode cloud (appended). The object is always a cloud: Material is gone, and its
+   // slot is the cloud's centre (above).
+   ModalBankParamItemCloudWidth,     // Gaussian sigma, octaves
+   ModalBankParamItemCloudSeed,      // integer; one seed is one object
+   ModalBankParamItemCloudReseed,    // 0 = the seed's cloud on every note, 1 = a new cloud per note-on
+   ModalBankParamItemCloudKeepFund,  // 1 = mode 0 is the fundamental, 0 = every mode is drawn
+   // The cloud's loudness curve (ModalCloud::amplitude). It replaced the damp bell on the panel; the
+   // bell's items above stay, at their default 0 = off.
+   ModalBankParamItemCloudFocus,       // 0 = amplitude 1/sqrt(ratio), 1 = a Gaussian over loudness
+   ModalBankParamItemCloudFocusCentre, // the loudness peak, octaves above the fundamental
+   ModalBankParamItemCloudFocusWidth,  // the loudness curve's sigma, octaves
 };
 
 // Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials

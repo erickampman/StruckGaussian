@@ -38,7 +38,7 @@ void setBank(VoiceManager& vm, ModalBankParamItem item, float v) {
    vm.setParameter(MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, item), v);
 }
 
-// Poly, one Harmonic mode per voice, instant pitch slew (as the plugin sets it in poly).
+// Poly, one mode per voice (the cloud's kept fundamental alone), instant pitch slew (as the plugin sets it in poly).
 void configure(VoiceManager& vm, bool mono = false) {
    setVM(vm, MIDIParamItemVoiceCount, mono ? 1.0f : 10.0f);
    setVM(vm, MIDIParamItemLegato, mono ? 1.0f : 0.0f);
@@ -48,7 +48,8 @@ void configure(VoiceManager& vm, bool mono = false) {
    setVM(vm, MIDIParamItemFreeRun, 0);
    vm.setParameter(slew1RiseAddress, 1e-8f);
    vm.setParameter(slew1FallAddress, 1e-8f);
-   setBank(vm, ModalBankParamItemMaterial, float(ModalBankMaterialGen0));
+   setBank(vm, ModalBankParamItemCloudCentre, 0.0f);
+   setBank(vm, ModalBankParamItemCloudKeepFund, 1.0f);
    setBank(vm, ModalBankParamItemModeCount, 1.0f);
    setBank(vm, ModalBankParamItemDecayT60, 60.0f);
    setBank(vm, ModalBankParamItemSpread, 0.0f);
@@ -847,10 +848,13 @@ void testExpression() {
       check(near(t, 0.5), "Press>Decay 0: pressure leaves T60 alone (" + num(t) + " s)");
    }
 
-   // Two harmonic modes, C4 and C5, equal decay at Damp 0: tilt then shortens the upper one.
+   // Two harmonic modes, C4 and C5, equal decay at Damp 0: tilt then shortens the upper one. The
+   // cloud's kept fundamental plus one draw, which recentring puts exactly on Centre: C5.
    auto twoModes = [&](float t60) {
       auto vm = fresh(t60);
       setBank(*vm, ModalBankParamItemModeCount, 2.0f);
+      setBank(*vm, ModalBankParamItemCloudCentre, 1.0f);
+      setBank(*vm, ModalBankParamItemCloudWidth, 0.002f);
       setBank(*vm, ModalBankParamItemDampTilt, 0.0f);
       return vm;
    };
@@ -869,24 +873,7 @@ void testExpression() {
       check(t < 0.5 * p, "Tmb>Tilt +2: CC74 after the strike makes the upper mode die faster (upper/fundamental "
                              + num(t) + " vs " + num(p) + " untilted)");
    }
-   {  // Tmb>Pos, read at the strike: strike position 0.25 + 0.25 = 0.5 cancels the even (upper) mode.
-      auto vm = twoModes(4.0f);
-      setBank(*vm, ModalBankParamItemStrikeModLevel, 0.25f);
-      vm->handleMIDIMessage(pm::fromMidi1Bytes(0xB0, 74, 127));      // CC74 before the note, as MPE sends it
-      vm->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
-      const double atHalf = upperShare(render(*vm, 9600));
-      auto plain = twoModes(4.0f);
-      setBank(*plain, ModalBankParamItemStrikeModLevel, 0.25f);
-      plain->handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
-      const double atQuarter = upperShare(render(*plain, 9600));
-      check(atHalf < 0.01 && atQuarter > 0.3, "Tmb>Pos +0.25: CC74 at the strike moves it to 0.5 and cancels the even mode ("
-                                                  + num(atHalf) + " vs " + num(atQuarter) + ")");
-      plain->handleMIDIMessage(pm::fromMidi1Bytes(0xB0, 74, 127));   // after the strike: too late to matter
-      render(*plain, 2048);
-      const double later = upperShare(render(*plain, 9600));
-      check(std::fabs(later / atQuarter - 1.0) < 0.05, "CC74 after the strike leaves the ringing note's modes alone ("
-                                                           + num(later) + ")");
-   }
+   // Tmb>Pos went with Strike Position: a mode cloud has no strike-position weighting.
 }
 
 // --- channel mode messages: CC 123 All Notes Off, CC 120 All Sound Off ------------------------------
@@ -948,6 +935,47 @@ void testChannelModeMessages() {
 
 // Note-offs the engine generates itself (sustain pedal, all-notes-off, panic) must carry the
 // note's channel, or they never match the note they are meant to release.
+// --- the mode cloud: Seed and Reseed -----------------------------------------------------------------
+// The same note struck three times, each left to ring out first. Reseed Off plays the Seed's cloud every
+// time, so the strikes match; Per Note draws a new cloud at each note-on, so they differ. The second and
+// third are compared: a fresh engine's first strike differs from every later one even with one mode
+// and Reseed off (first-note voice state, inherited from StruckSynth; see MILESTONES.md).
+void testCloudReseed() {
+   std::printf("Mode cloud (Seed / Reseed):\n");
+   auto strikes = [](float reseed, float seed) {
+      VoiceManager vm(kSampleRate, kBlock);
+      configure(vm);
+      setBank(vm, ModalBankParamItemModeCount, 16.0f);
+      setBank(vm, ModalBankParamItemCloudCentre, 1.0f);
+      setBank(vm, ModalBankParamItemCloudWidth, 0.5f);
+      setBank(vm, ModalBankParamItemCloudSeed, seed);
+      setBank(vm, ModalBankParamItemCloudReseed, reseed);
+      setBank(vm, ModalBankParamItemDecayT60, 0.05f);
+      std::vector<std::vector<float>> hits;
+      for (int k = 0; k < 3; ++k) {
+         vm.handleMIDIMessage(pm::fromMidi1Bytes(0x90, 60, 100));
+         hits.push_back(render(vm, 2400));
+         vm.handleMIDIMessage(pm::fromMidi1Bytes(0x80, 60, 0));
+         render(vm, uint32_t(kSampleRate));           // ring out: 20 T60s
+      }
+      return std::make_pair(hits[1], hits[2]);
+   };
+   auto difference = [](const std::vector<float>& a, const std::vector<float>& b) {
+      double d = 0.0, r = 0.0;
+      for (size_t i = 0; i < a.size(); ++i) {
+         d += double(b[i] - a[i]) * double(b[i] - a[i]);
+         r += double(a[i]) * double(a[i]);
+      }
+      return std::sqrt(d / std::max(r, 1e-30));
+   };
+   const auto off = strikes(0.0f, 1.0f), on = strikes(1.0f, 1.0f), seed2 = strikes(0.0f, 2.0f);
+   const double dOff = difference(off.first, off.second), dOn = difference(on.first, on.second);
+   const double dSeed = difference(off.first, seed2.first);
+   check(dOff < 0.01, "Reseed Off: the same cloud on every note (difference " + num(dOff) + ")");
+   check(dOn > 0.1, "Reseed Per Note: a new cloud on the next note (difference " + num(dOn) + ")");
+   check(dSeed > 0.1, "Seed 2 is a different cloud from Seed 1 (difference " + num(dSeed) + ")");
+}
+
 void testGeneratedNoteOffsMatchChannel() {
    std::printf("Engine note-offs on other channels:\n");
    VoiceManager pedal(kSampleRate, kBlock);
@@ -1002,6 +1030,7 @@ int main() {
    testChannelModeMessages();
    testReleasedNotes();
    testExpression();
+   testCloudReseed();
    testGeneratedNoteOffsMatchChannel();
    if (g_fails == 0) std::printf("ALL PASS\n");
    else std::printf("%d FAILED\n", g_fails);

@@ -229,22 +229,23 @@ AUParameterAddress vmAddress(uint32_t paramIndex) {
     case kParamContactMode:    return MODULE_PARAM_ADDRESS(ModuleParamKindStrike, ModuleInstance1, StrikeParamItemContactMode);
     // ModalBank: object
     case kParamPitch:          return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemPitch);
-    case kParamMaterial:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemMaterial);
+    case kParamCloudCentre:    return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudCentre);
+    case kParamCloudWidth:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudWidth);
+    case kParamCloudSeed:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudSeed);
+    case kParamCloudReseed:    return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudReseed);
+    case kParamCloudKeepFund:  return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudKeepFund);
     case kParamModeCount:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemModeCount);
     case kParamStretch:        return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStretch);
     // ModalBank: decay
     case kParamDecayT60:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayT60);
     case kParamDampTilt:       return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTilt);
-    case kParamDampBellAmount: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellAmount);
-    case kParamDampBellCentre: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellCentre);
-    case kParamDampBellWidth:  return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampBellWidth);
     // ModalBank: timbre
-    case kParamStrikePosition: return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikePosition);
-    case kParamBrightness:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemBrightness);
+    case kParamFocus:          return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudFocus);
+    case kParamFocusCentre:    return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudFocusCentre);
+    case kParamFocusWidth:     return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemCloudFocusWidth);
     // Expression: the bank's mod levels for the Pressure / Timbre inputs (VoiceManager::buildDefaultPatch)
     case kParamPressToDecay:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayModLevel);
     case kParamTimbreToTilt:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTiltModLevel);
-    case kParamTimbreToPos:    return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemStrikeModLevel);
     default:                   return 0;
     }
 }

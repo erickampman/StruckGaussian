@@ -51,6 +51,7 @@ ModalBank::ModalBank()
     , mDampBellCentre(2.0f)
     , mDampBellWidth(0.4f)
     , mStrikePos(0.25f)
+    , mPositionWeighting(true)
     , mSpread(0.0f)
     , mDirty(true)
 {
@@ -126,6 +127,12 @@ void ModalBank::setStrikePosition(float p) {
     mDirty = true;
 }
 
+void ModalBank::setPositionWeighting(bool on) {
+    if (on == mPositionWeighting) return;
+    mPositionWeighting = on;
+    mDirty = true;
+}
+
 void ModalBank::setSpread(float s) {
     s = clampf(s, 0.0f, 1.0f);
     if (s == mSpread) return;
@@ -172,6 +179,14 @@ float ModalBank::modeT60(int i) const {
     const double r = std::sqrt(std::max(0.0, -(double)mA2[i]));
     if (r <= 0.0 || r >= 1.0) return 0.0f;
     return (float)(-kLn1000 / (std::log(r) * mSampleRate));
+}
+
+float ModalBank::modeAmplitude(int i) const {
+    if (i < 0 || i >= mModeCount || mGain[i] == 0.0f) return 0.0f;
+    // mGain = A * sin(w) (see recomputeIfDirty), so A = mGain / sin(w).
+    const double w = 2.0 * M_PI * (double)modeFrequency(i) / mSampleRate;
+    const double s = std::sin(w);
+    return (s > 0.0) ? (float)std::fabs((double)mGain[i] / s) : 0.0f;
 }
 
 void ModalBank::recomputeIfDirty() {
@@ -244,7 +259,8 @@ void ModalBank::recomputeIfDirty() {
         // Excitation position. Striking at a node of mode i cancels it; the
         // classic case is p = 0.5 killing every even mode of a string, which
         // hollows the tone out the way a square wave is hollow.
-        const double posGain = std::fabs(std::sin(M_PI * ratio * (double)mStrikePos));
+        const double posGain = mPositionWeighting
+                             ? std::fabs(std::sin(M_PI * ratio * (double)mStrikePos)) : 1.0;
 
         // Amplitude tilt. Halved exponent keeps the extremes sane: a mode at
         // ratio 30 would otherwise get a 30x boost at full brightness.

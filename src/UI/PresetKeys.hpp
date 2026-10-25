@@ -27,22 +27,23 @@ static constexpr PresetKey kPresetKeys[kParamCount] = {
    /*VelToHardness*/   {"Strike",    "velToHardness"},
    /*ContactMode*/     {"Strike",    "contactMode"},
    /*Pitch*/           {"ModalBank", "pitch"},
-   /*Material*/        {"ModalBank", "material"},
+   /*CloudCentre*/     {"ModalBank", "cloudCentre"},
+   /*CloudWidth*/      {"ModalBank", "cloudWidth"},
    /*ModeCount*/       {"ModalBank", "modeCount"},
+   /*CloudSeed*/       {"ModalBank", "cloudSeed"},
+   /*CloudReseed*/     {"ModalBank", "cloudReseed"},
+   /*CloudKeepFund*/   {"ModalBank", "cloudKeepFund"},
    /*Stretch*/         {"ModalBank", "stretch"},
    /*DecayT60*/        {"ModalBank", "decayT60"},
    /*DampTilt*/        {"ModalBank", "dampTilt"},
-   /*DampBellAmount*/  {"ModalBank", "dampBellAmount"},
-   /*DampBellCentre*/  {"ModalBank", "dampBellCentre"},
-   /*DampBellWidth*/   {"ModalBank", "dampBellWidth"},
-   /*StrikePosition*/  {"ModalBank", "strikePosition"},
-   /*Brightness*/      {"ModalBank", "brightness"},
+   /*Focus*/           {"ModalBank", "cloudFocus"},
+   /*FocusCentre*/     {"ModalBank", "cloudFocusCentre"},
+   /*FocusWidth*/      {"ModalBank", "cloudFocusWidth"},
    // MPE describes the controller, not the sound: factory presets leave it out, and the loader keeps
    // the current value for any key a preset does not mention.
    /*Mpe*/             {"Global",    "mpe"},
    /*PressToDecay*/    {"Expression", "pressToDecay"},
    /*TimbreToTilt*/    {"Expression", "timbreToTilt"},
-   /*TimbreToPos*/     {"Expression", "timbreToPos"},
 };
 
 } // namespace struckgaussian
