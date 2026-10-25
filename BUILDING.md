@@ -1,8 +1,8 @@
-# Building StruckSynth
+# Building StruckGaussian
 
-StruckSynth builds the same way on Linux and macOS: CMake + Ninja, git submodules, C++20. The build
-makes the plugin `StruckSynth.clap`, the same plugin wrapped as `StruckSynth.vst3` and, on macOS,
-`StruckSynth.component` (AUv2), and the tests.
+StruckGaussian builds the same way on Linux and macOS: CMake + Ninja, git submodules, C++20. The build
+makes the plugin `StruckGaussian.clap`, the same plugin wrapped as `StruckGaussian.vst3` and, on macOS,
+`StruckGaussian.component` (AUv2), and the tests.
 
 ## What you need
 
@@ -27,13 +27,13 @@ sudo apt install build-essential cmake ninja-build pkg-config python3 git \
 ```
 
 It's one list for every Unlikelyware project (the same one CI installs), so it covers more than
-StruckSynth needs. On other distros, install the same libraries under their own names.
+StruckGaussian needs. On other distros, install the same libraries under their own names.
 
 ## Get the source
 
 ```bash
-git clone https://github.com/erickampman/StruckSynth.git
-cd StruckSynth
+git clone https://github.com/erickampman/StruckGaussian.git
+cd StruckGaussian
 tools/fetch_deps.sh
 ```
 
@@ -58,9 +58,9 @@ The same three commands on both platforms. Everything goes in `build/` (ignored 
 
 The full test suite is described in [TESTING.md](TESTING.md).
 
-This produces `build/StruckSynth.clap` (a bundle on macOS), `build/StruckSynth.vst3` (on Linux
-`build/Release/StruckSynth.vst3`) and, on macOS, `build/StruckSynth.component` (AUv2: type `aumu`,
-subtype `StSy`, manufacturer `nLKL`).
+This produces `build/StruckGaussian.clap` (a bundle on macOS), `build/StruckGaussian.vst3` (on Linux
+`build/Release/StruckGaussian.vst3`) and, on macOS, `build/StruckGaussian.component` (AUv2: type `aumu`,
+subtype `StGa`, manufacturer `nLKL`).
 
 ## Installing the plugin for hosts
 
@@ -89,17 +89,17 @@ To keep the plugin without the clone, copy it instead (the `rm` clears a link th
 ```bash
 # Linux
 mkdir -p ~/.clap ~/.vst3
-rm -rf ~/.clap/StruckSynth.clap ~/.vst3/StruckSynth.vst3
-cp build/StruckSynth.clap ~/.clap/
-cp -R build/Release/StruckSynth.vst3 ~/.vst3/
+rm -rf ~/.clap/StruckGaussian.clap ~/.vst3/StruckGaussian.vst3
+cp build/StruckGaussian.clap ~/.clap/
+cp -R build/Release/StruckGaussian.vst3 ~/.vst3/
 ```
 
 ```bash
 # macOS
 mkdir -p ~/Library/Audio/Plug-Ins/CLAP ~/Library/Audio/Plug-Ins/VST3
-rm -rf ~/Library/Audio/Plug-Ins/CLAP/StruckSynth.clap ~/Library/Audio/Plug-Ins/VST3/StruckSynth.vst3
-cp -R build/StruckSynth.clap ~/Library/Audio/Plug-Ins/CLAP/
-cp -R build/StruckSynth.vst3 ~/Library/Audio/Plug-Ins/VST3/
+rm -rf ~/Library/Audio/Plug-Ins/CLAP/StruckGaussian.clap ~/Library/Audio/Plug-Ins/VST3/StruckGaussian.vst3
+cp -R build/StruckGaussian.clap ~/Library/Audio/Plug-Ins/CLAP/
+cp -R build/StruckGaussian.vst3 ~/Library/Audio/Plug-Ins/VST3/
 ```
 
 For every user instead, the same folders without `~` (`/usr/lib/clap` and `/usr/lib/vst3` on Linux,
@@ -113,15 +113,15 @@ Pass these to the first command (`cmake -B build ... -DNAME=VALUE`).
 
 | Option | Default | Effect |
 |---|---|---|
-| `STRUCKSYNTH_BUILD_VST3` | `ON` | Build `StruckSynth.vst3` through clap-wrapper (with the vendored `external/vst3sdk`). |
-| `STRUCKSYNTH_BUILD_AUV2` | `ON` on macOS, `OFF` elsewhere | Build `StruckSynth.component` through clap-wrapper. **macOS only**. The first configure downloads Apple's AudioUnitSDK; `-DAUDIOUNIT_SDK_ROOT=...` uses a local copy. |
-| `STRUCKSYNTH_WERROR` | `OFF` | Warnings as errors (CI turns it on). |
-| `STRUCKSYNTH_PRESET_DUMP` | `OFF` | A dev-only DUMP button that writes the current patch as JSON to `$HOME`. |
+| `STRUCKGAUSSIAN_BUILD_VST3` | `ON` | Build `StruckGaussian.vst3` through clap-wrapper (with the vendored `external/vst3sdk`). |
+| `STRUCKGAUSSIAN_BUILD_AUV2` | `ON` on macOS, `OFF` elsewhere | Build `StruckGaussian.component` through clap-wrapper. **macOS only**. The first configure downloads Apple's AudioUnitSDK; `-DAUDIOUNIT_SDK_ROOT=...` uses a local copy. |
+| `STRUCKGAUSSIAN_WERROR` | `OFF` | Warnings as errors (CI turns it on). |
+| `STRUCKGAUSSIAN_PRESET_DUMP` | `OFF` | A dev-only DUMP button that writes the current patch as JSON to `$HOME`. |
 
 ## Checking a build
 
 Validate the CLAP with [clap-validator](https://github.com/free-audio/clap-validator)
-(`clap-validator validate build/StruckSynth.clap`), and the AU with `auval -v aumu StSy nLKL`. If
+(`clap-validator validate build/StruckGaussian.clap`), and the AU with `auval -v aumu StGa nLKL`. If
 auval says it can't find the component, `killall -9 AudioComponentRegistrar` and try again.
 
 ## How this differs from the other projects
@@ -131,5 +131,5 @@ commands under "Build and test", and for a plugin `cmake --build build --target 
 same package list, the same `build/` folder, the same option names (`<PROJECT>_BUILD_VST3`,
 `<PROJECT>_UW_CORE_DIR` and so on). What's different here, and why:
 
-- One of the six synths (PlainOldSynth, StruckSynth, StruckRoom, StruckKit, IFSynth, ModicumFM), which share the PolygraphModular framework, vendored, and DPF for the UI. `tools/fetch_deps.sh` also applies `patches/` to clap-wrapper (its AUv2 view), so `external/clap-wrapper` shows a local change: that is the patch, not uncommitted work.
+- One of the six synths (PlainOldSynth, StruckGaussian, StruckRoom, StruckKit, IFSynth, ModicumFM), which share the PolygraphModular framework, vendored, and DPF for the UI. `tools/fetch_deps.sh` also applies `patches/` to clap-wrapper (its AUv2 view), so `external/clap-wrapper` shows a local change: that is the patch, not uncommitted work.
 - Nothing else.

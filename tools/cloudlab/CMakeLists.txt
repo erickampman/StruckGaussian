@@ -9,10 +9,10 @@ endif()
 
 # The object is the plugin's own ModalBank (src/Module), built in place so the
 # experiments always hear what the plugin plays.
-set(STRUCKSYNTH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH "StruckSynth checkout (ModalBank lives in its src/Module)")
-set(MODAL_DIR "${STRUCKSYNTH_DIR}/src/Module")
+set(STRUCKGAUSSIAN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH "StruckGaussian checkout (ModalBank lives in its src/Module)")
+set(MODAL_DIR "${STRUCKGAUSSIAN_DIR}/src/Module")
 if(NOT EXISTS "${MODAL_DIR}/ModalBank.cpp")
-    message(FATAL_ERROR "ModalBank.cpp not found under ${MODAL_DIR}; set STRUCKSYNTH_DIR")
+    message(FATAL_ERROR "ModalBank.cpp not found under ${MODAL_DIR}; set STRUCKGAUSSIAN_DIR")
 endif()
 
 add_executable(cloudlab cloudlab.cpp "${MODAL_DIR}/ModalBank.cpp")

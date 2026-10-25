@@ -88,7 +88,7 @@ const std::vector<ModuleInitSpec>& getModuleInitSpecs() {
       {finalAddress, &finalConstantsGroup, InitFinalModule, DeinitFinalModule, ProcessFinalModule,
        MIDIFinalModule, nullptr, nullptr, SampleRateFinalModule},
 
-      // --- StruckSynth modules (present but unconnected until buildDefaultPatch wires them) ---
+      // --- StruckGaussian modules (present but unconnected until buildDefaultPatch wires them) ---
       // Strike: the exciter. Uses the MIDI slot (note-on → burst); Reset clears any active burst.
       {strike1Address, &strikeConstantsGroup, InitStrikeModule, DeinitStrikeModule,
        ProcessStrikeModule, MIDIStrikeModule, nullptr, ResetStrikeModule, SampleRateStrikeModule},

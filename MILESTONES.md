@@ -1,4 +1,7 @@
-# StruckSynth milestones
+# StruckGaussian milestones
+
+Cloned from StruckSynth (c59add0) on 2026-10-25; M1-M4 and the mode-cloud experiment below are StruckSynth's,
+inherited with its history.
 
 ## Tests
 - all: cmake --build build -j && ctest --test-dir build --output-on-failure

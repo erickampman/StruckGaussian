@@ -1,4 +1,4 @@
-# StruckSynth
+# StruckGaussian
 
 A cross-platform **CLAP modal-synthesis instrument** from Unlikelyware — a struck-resonator
 voice built on the PolygraphModular voice engine. Each note fires a shaped excitation burst
@@ -55,7 +55,7 @@ dropped, because no voice owns that note yet. The default range is not a host pa
 ### MPE
 
 The **MPE** switch (Global panel, off by default) treats input as an MPE lower zone: master channel
-1, member channels 2–16. MPE is accepted as an input only; StruckSynth never sends it.
+1, member channels 2–16. MPE is accepted as an input only; StruckGaussian never sends it.
 
 - A member channel's bend range defaults to **±48**, and the master channel's bend (±2) is **added**
   to every member note, so the controller's pitch wheel moves the whole zone on top of each note's
@@ -145,7 +145,7 @@ PlainOldSynth uses.
 
 ## Installing
 
-The download holds `StruckSynth.clap`. Put it in your CLAP folder (create the folder if it isn't there),
+The download holds `StruckGaussian.clap`. Put it in your CLAP folder (create the folder if it isn't there),
 then rescan plugins in your host:
 
 | | Linux | macOS |
@@ -157,17 +157,17 @@ On macOS, `~/Library` is hidden in Finder: Go ▸ Go to Folder opens it. The 0.9
 notarized, so macOS won't load a downloaded plugin until its quarantine flag is cleared:
 
 ```bash
-xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/StruckSynth.clap
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/StruckGaussian.clap
 ```
 
-A host that is already running keeps the plugins it loaded: quit and restart it. To build StruckSynth
+A host that is already running keeps the plugins it loaded: quit and restart it. To build StruckGaussian
 yourself instead, see below.
 
 ## Building from source
 
 ```bash
-git clone https://github.com/erickampman/StruckSynth.git
-cd StruckSynth
+git clone https://github.com/erickampman/StruckGaussian.git
+cd StruckGaussian
 tools/fetch_deps.sh
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build

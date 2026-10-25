@@ -1,16 +1,16 @@
 // PresetDump.hpp — DEV-ONLY. Writes the current patch as module-nested JSON (PM-style) to a
-// timestamped file in $HOME. Compiled in only when STRUCKSYNTH_PRESET_DUMP=1 (see CMake option); the
+// timestamped file in $HOME. Compiled in only when STRUCKGAUSSIAN_PRESET_DUMP=1 (see CMake option); the
 // UI triggers it on a keystroke. Uses the kPresetKeys mapping (module, item pair per param) from
 // PresetKeys.hpp, shared with the always-on preset loader. Author new presets by dialing in a
 // sound, dumping, then moving the JSON into Presets/ (rename it — the file stem or meta.name
 // becomes the preset name) and rebuilding.
 
-#ifndef STRUCKSYNTH_PRESETDUMP_HPP
-#define STRUCKSYNTH_PRESETDUMP_HPP
+#ifndef STRUCKGAUSSIAN_PRESETDUMP_HPP
+#define STRUCKGAUSSIAN_PRESETDUMP_HPP
 
-#if STRUCKSYNTH_PRESET_DUMP
+#if STRUCKGAUSSIAN_PRESET_DUMP
 
-#include "StruckSynthParams.h"
+#include "StruckGaussianParams.h"
 #include "PresetKeys.hpp"
 
 #include <cmath>
@@ -21,7 +21,7 @@
 #include <ctime>
 #include <string>
 
-namespace strucksynth {
+namespace struckgaussian {
 
 // Emit modules in this order; every module in kPresetKeys must appear here.
 static constexpr const char* kPresetModuleOrder[] = {
@@ -38,11 +38,11 @@ inline std::string buildPresetJson(const float* values, const char* name = "Unti
 
    std::string j;
    j += "{\n";
-   j += "  \"app\": { \"name\": \"StruckSynth\", \"version\": \"1.0.0\" },\n";
-   j += "  \"plugin\": { \"format\": \"clap\", \"id\": \"com.unlikelyware.strucksynth\" },\n";
+   j += "  \"app\": { \"name\": \"StruckGaussian\", \"version\": \"1.0.0\" },\n";
+   j += "  \"plugin\": { \"format\": \"clap\", \"id\": \"com.unlikelyware.struckgaussian\" },\n";
    j += "  \"meta\": { \"author\": \"\", \"createdAt\": \"" + std::string(iso)
         + "\", \"name\": \"" + name + "\" },\n";
-   j += "  \"schema\": \"strucksynth.preset\",\n";
+   j += "  \"schema\": \"struckgaussian.preset\",\n";
    j += "  \"schemaVersion\": 1,\n";
    j += "  \"state\": {\n";
    j += "    \"parameterState\": {\n";
@@ -78,12 +78,12 @@ inline std::string buildPresetJson(const float* values, const char* name = "Unti
    return j;
 }
 
-// Write the patch to $HOME/strucksynth-preset-<epoch>.json. Returns the path, or "" on failure.
+// Write the patch to $HOME/struckgaussian-preset-<epoch>.json. Returns the path, or "" on failure.
 inline std::string dumpPresetToFile(const float* values)
 {
    const std::string json = buildPresetJson(values);
    const char* home = std::getenv("HOME");
-   std::string path = std::string(home ? home : ".") + "/strucksynth-preset-"
+   std::string path = std::string(home ? home : ".") + "/struckgaussian-preset-"
                     + std::to_string(static_cast<long long>(std::time(nullptr))) + ".json";
    FILE* f = std::fopen(path.c_str(), "w");
    if (f == nullptr)
@@ -93,7 +93,7 @@ inline std::string dumpPresetToFile(const float* values)
    return path;
 }
 
-} // namespace strucksynth
+} // namespace struckgaussian
 
-#endif // STRUCKSYNTH_PRESET_DUMP
-#endif // STRUCKSYNTH_PRESETDUMP_HPP
+#endif // STRUCKGAUSSIAN_PRESET_DUMP
+#endif // STRUCKGAUSSIAN_PRESETDUMP_HPP

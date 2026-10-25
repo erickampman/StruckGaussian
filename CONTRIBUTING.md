@@ -1,4 +1,4 @@
-# Contributing to StruckSynth
+# Contributing to StruckGaussian
 
 Bug reports and pull requests are welcome. Build steps are in the README; this page is the rules the
 code depends on.
@@ -7,11 +7,11 @@ code depends on.
 
 ```sh
 ctest --test-dir build --output-on-failure
-clap-validator validate build/StruckSynth.clap
+clap-validator validate build/StruckGaussian.clap
 ```
 
 The tests are the `pm-*` engine tests, `ss-bend` and `ss-clap`. `ss-clap` loads the built `.clap` and plays it headless, sending MIDI 2.0, MPE and CLAP events itself, so it needs no MIDI hardware. They are silent. On macOS, if you touched the AUv2 build, also run
-`ninja -C build install-auv2` and `auval -v aumu StSy nLKL`.
+`ninja -C build install-auv2` and `auval -v aumu StGa nLKL`.
 
 After rebuilding, quit and restart the host before listening: a running host keeps the plugin binary
 it loaded first.
@@ -21,7 +21,7 @@ it loaded first.
 The CLAP parameter id is the parameter's index, and hosts save sessions and automation by id. So a
 new parameter goes at the **end** of the list, and existing ones are never reordered or removed: that
 would silently rewire everyone's saved projects. For each new parameter:
-- add it to the `symbolIs` order guard in `plugin/StruckSynthParams.h`;
+- add it to the `symbolIs` order guard in `plugin/StruckGaussianParams.h`;
 - if it shapes the sound, give it a preset key (`src/UI/PresetKeys.hpp`) and add a line for it to every `Presets/*.json`, edited as text so the files aren't reformatted.
 
 MIDI controller setup (MPE on/off and the like) stays out of presets.
@@ -79,14 +79,14 @@ The engine (`src/`) mirrors PolygraphModular's structure; the CLAP plugin + GUI 
 ```
 plugin/               the shared plugin definition
                         DistrhoPluginInfo.h (UI flags; the plugin identity macros are inert),
-                        StruckSynthParams.h (shared param table + dropdown labels)
+                        StruckGaussianParams.h (shared param table + dropdown labels)
 src/plugin.cpp        the raw CLAP plugin: entry point, note/audio/params/state/gui extensions,
                         and the DSP glue (MIDI + params → VoiceManager)
 src/plugin_gui.h      the C seam between plugin.cpp and the GUI shell
 src/UI/               the plugin GUI (reusable NanoVG widgets + the panel)
                         Knob, Slider, Toggle, Dropdown, PopupMenu, TabBar, GroupBox, TitleText,
                         Logo; PresetKeys / PresetDump (preset menu + dev-only JSON dumper);
-                        StruckSynthUI.cpp — composes the controls into labelled groups and hosts
+                        StruckGaussianUI.cpp — composes the controls into labelled groups and hosts
                         them through DPF's UIExporter
 src/Common/           shim + MIDI + params + utilities
                         pm_compat.h (Apple→portable), pm_midi.* (spec UMP + MIDI-1 decode),

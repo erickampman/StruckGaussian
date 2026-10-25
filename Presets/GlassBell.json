@@ -1,8 +1,8 @@
 {
-  "app": { "name": "StruckSynth", "version": "1.0.0" },
-  "plugin": { "format": "clap", "id": "com.unlikelyware.strucksynth" },
+  "app": { "name": "StruckGaussian", "version": "1.0.0" },
+  "plugin": { "format": "clap", "id": "com.unlikelyware.struckgaussian" },
   "meta": { "author": "unlikelyware", "name": "Glass Bell" },
-  "schema": "strucksynth.preset",
+  "schema": "struckgaussian.preset",
   "schemaVersion": 1,
   "state": {
     "parameterState": {
