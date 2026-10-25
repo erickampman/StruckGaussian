@@ -41,7 +41,13 @@ the measurements). Decided 2026-10-25:
 - [x] ctest 12/12; clap-validator 35 pass, 0 fail
 - [x] By hand: Object (eight controls), Timbre (three: Focus) and Expression (two) checked by eye (2026-10-25)
 - [x] By hand: played in StageHand (2026-10-25)
-- [ ] Presets: GlassBell, Marimba, TineEP, WoodBlock still name StruckSynth's materials; replace with cloud presets
+- [x] Presets: StruckSynth's four material presets replaced by eight cloud presets (2026-10-25), designed from the
+      cloudlab measurements, one per kind of sound: Chorus Unison (a unison-narrow cloud on f0), Octave Shimmer (f0 and
+      a chorused octave), Focused Glass (wide cloud, narrow Focus on f0), Halo (48 modes, a broad Focus), Dark Gong
+      (centred half an octave under, long low modes), Clang Cluster (1.5 octaves up, bright), Wood Cluster (10 modes,
+      short and damped), Never Twice (Reseed Per Note). Rendered through cloudlab at C2/C4/C6: peaks within 2.6 dB of
+      each other; Dark Gong's T60 5-6 s after narrowing (the first draft rang 18 s, low modes to 38 s)
+- [x] By hand: presets listened to (2026-10-25)
 - [ ] Help page still describes StruckSynth's materials
 - [x] A strike's first block was wrong, two bugs inherited from StruckSynth (same probe there):
       - The bank read its pitch at the block's first sample, where the Slew (0.21 oct a sample at its fastest) has

@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "StruckGaussian",
+    "version": "1.0.0"
+  },
+  "plugin": {
+    "format": "clap",
+    "id": "com.unlikelyware.struckgaussian"
+  },
+  "meta": {
+    "author": "unlikelyware",
+    "name": "Chorus Unison"
+  },
+  "schema": "struckgaussian.preset",
+  "schemaVersion": 1,
+  "state": {
+    "parameterState": {
+      "Global": {
+        "voiceMode": "1",
+        "glide": "0.010000",
+        "level": "0.500000",
+        "spread": "0.700000"
+      },
+      "Strike": {
+        "type": "0",
+        "hardness": "0.300000",
+        "velToLevel": "1.000000",
+        "velToHardness": "0.500000",
+        "contactMode": "0"
+      },
+      "ModalBank": {
+        "pitch": "0.000000",
+        "cloudCentre": "0.000000",
+        "cloudWidth": "0.008000",
+        "modeCount": "12",
+        "cloudSeed": "1",
+        "cloudReseed": "0",
+        "cloudKeepFund": "1",
+        "stretch": "9",
+        "decayT60": "3.500000",
+        "dampTilt": "0.400000",
+        "cloudFocus": "0.000000",
+        "cloudFocusCentre": "0.000000",
+        "cloudFocusWidth": "0.500000"
+      },
+      "Expression": {
+        "pressToDecay": "0.000000",
+        "timbreToTilt": "0.000000"
+      }
+    }
+  }
+}

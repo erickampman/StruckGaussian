@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "StruckGaussian",
+    "version": "1.0.0"
+  },
+  "plugin": {
+    "format": "clap",
+    "id": "com.unlikelyware.struckgaussian"
+  },
+  "meta": {
+    "author": "unlikelyware",
+    "name": "Focused Glass"
+  },
+  "schema": "struckgaussian.preset",
+  "schemaVersion": 1,
+  "state": {
+    "parameterState": {
+      "Global": {
+        "voiceMode": "1",
+        "glide": "0.010000",
+        "level": "0.500000",
+        "spread": "0.300000"
+      },
+      "Strike": {
+        "type": "0",
+        "hardness": "0.150000",
+        "velToLevel": "1.000000",
+        "velToHardness": "0.500000",
+        "contactMode": "0"
+      },
+      "ModalBank": {
+        "pitch": "0.000000",
+        "cloudCentre": "0.000000",
+        "cloudWidth": "0.600000",
+        "modeCount": "32",
+        "cloudSeed": "1",
+        "cloudReseed": "0",
+        "cloudKeepFund": "1",
+        "stretch": "9",
+        "decayT60": "3.000000",
+        "dampTilt": "0.300000",
+        "cloudFocus": "1.000000",
+        "cloudFocusCentre": "0.000000",
+        "cloudFocusWidth": "0.120000"
+      },
+      "Expression": {
+        "pressToDecay": "0.000000",
+        "timbreToTilt": "0.000000"
+      }
+    }
+  }
+}
