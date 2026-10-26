@@ -246,6 +246,8 @@ AUParameterAddress vmAddress(uint32_t paramIndex) {
     // Expression: the bank's mod levels for the Pressure / Timbre inputs (VoiceManager::buildDefaultPatch)
     case kParamPressToDecay:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDecayModLevel);
     case kParamTimbreToTilt:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTiltModLevel);
+    case kParamRingLevel:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemRingLevel);
+    case kParamRingPitch:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemRingPitch);
     default:                   return 0;
     }
 }

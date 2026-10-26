@@ -46,6 +46,10 @@
       "Expression": {
         "pressToDecay": "0.000000",
         "timbreToTilt": "0.000000"
+      },
+      "Ring": {
+        "level": "0.000000",
+        "pitch": "0.000000"
       }
     }
   }

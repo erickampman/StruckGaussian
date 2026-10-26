@@ -396,6 +396,10 @@ enum ModalBankParamItem : NSUInteger {
    ModalBankParamItemCloudFocus,       // 0 = amplitude 1/sqrt(ratio), 1 = a Gaussian over loudness
    ModalBankParamItemCloudFocusCentre, // the loudness peak, octaves above the fundamental
    ModalBankParamItemCloudFocusWidth,  // the loudness curve's sigma, octaves
+   // Ring mod (appended, experimental): adds the output times a sine at the note's pitch (bend included,
+   // the Pitch transpose not) plus an offset.
+   ModalBankParamItemRingLevel,        // output * sine, ADDED to the output: 0 = off
+   ModalBankParamItemRingPitch,        // the sine's offset from the note, octaves
 };
 
 // Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials

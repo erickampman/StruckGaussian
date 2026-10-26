@@ -41,6 +41,12 @@ struct ModalBankState {
     float    trim = 1.0f;
     float    trimPos = -1.0f, trimBright = 0.0f, trimStretch = 0.0f, trimHz = 0.0f;
     bool     trimDirty = true;
+
+    // Ring mod: a free-running sine (its phase never resets on a strike, which would click a
+    // ringing note) and the level the last block ended at, so a moved knob ramps.
+    double   sampleRate = 48000.0;
+    double   ringPhase = 0.0;      // cycles, 0..1
+    float    ringLevel = 0.0f;
 };
 
 // The in-phase peak of the Bar table at the plugin's defaults (C4, Strike
@@ -97,6 +103,7 @@ const void InitModalBankModule(uint32_t /*count*/, Module* module)
 {
     auto* st = new ModalBankState();
     st->bank.setSampleRate(module->mSampleRate);
+    st->sampleRate = module->mSampleRate;
     st->bank.setPositionWeighting(false);   // a cloud has no string's mode shapes (ModalBank.hpp)
     module->state = st;
 }
@@ -121,6 +128,7 @@ const void ResetModalBankModule(Module* module)
     // click and destroy the ring-down. See ModalSynthesis.md.
     if (auto* st = static_cast<ModalBankState*>(module->state)) {
         st->bank.reset();
+        st->ringPhase = 0.0;
     }
 }
 
@@ -128,6 +136,7 @@ const void SampleRateModalBankModule(Module* module, double newSampleRate)
 {
     if (auto* st = static_cast<ModalBankState*>(module->state)) {
         st->bank.setSampleRate(newSampleRate);
+        st->sampleRate = newSampleRate;
     }
 }
 
@@ -253,6 +262,29 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
     if (level != 1.0f) {
         for (uint32_t i = 0; i < count; ++i) { outL[i] *= level; outR[i] *= level; }
     }
+
+    // --- ring mod ----------------------------------------------------------
+    // out += L * out * sin: the ring-modulated signal is ADDED to the struck sound, which stays at
+    // full level, so Ring 0 leaves the bank untouched. The sine tracks the note (with bend) but not the Pitch transpose, plus its own
+    // offset. The level ramps across the block; the frequency is per block, phase-continuous.
+    const float ringTarget = std::clamp(module->getParamValue(ModalBankParamItemRingLevel), 0.0f, 1.0f);
+    if (ringTarget > 0.0f || st->ringLevel > 0.0f) {
+        const float  ringOct = pitchLevel * pitchIn + bendLevel * bendIn
+                             + module->getParamValue(ModalBankParamItemRingPitch);
+        const double inc     = module->pitchConverter->pitchToFrequency(ringOct) / st->sampleRate;
+        const float  step    = count > 0 ? (ringTarget - st->ringLevel) / (float)count : 0.0f;
+        float  l     = st->ringLevel;
+        double phase = st->ringPhase;
+        for (uint32_t i = 0; i < count; ++i) {
+            l += step;
+            const float m = 1.0f + l * (float)std::sin(2.0 * M_PI * phase);
+            outL[i] *= m; outR[i] *= m;
+            phase += inc;
+            if (phase >= 1.0) phase -= std::floor(phase);
+        }
+        st->ringPhase = phase;
+    }
+    st->ringLevel = ringTarget;
 
     return &module->output;
 }

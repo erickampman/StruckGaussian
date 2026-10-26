@@ -288,6 +288,8 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"cloudFocus",     ModalBankParamItemCloudFocus,     0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
    {"cloudFocusCentre", ModalBankParamItemCloudFocusCentre, 0, 0, nullptr, -2.0f, 4.0f, 0.0f, 0},
    {"cloudFocusWidth", ModalBankParamItemCloudFocusWidth, 0, 0, nullptr, 0.05f, 3.0f, 0.5f, 0},
+   {"ringLevel",      ModalBankParamItemRingLevel,      0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
+   {"ringPitch",      ModalBankParamItemRingPitch,      0, 0, nullptr, -4.0f, 4.0f, 0.0f, 0},
 };
 const ModuleParamConstantsGroup modalBankConstantsGroup = {
    const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};

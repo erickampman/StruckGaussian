@@ -46,6 +46,9 @@ enum ParamIndex {
    // --- Expression (appended): what pressure and timbre (CC74) do; all 0 = no effect ---
    kParamPressToDecay,      // pressure → decay time, octaves of T60 at full pressure (+ rings longer)
    kParamTimbreToTilt,      // timbre → damping tilt, added to Damp at full timbre (+ darker tail)
+   // --- Ring mod (appended, experimental): adds the output times a sine that tracks the note ---
+   kParamRingLevel,         // the ring-modulated signal added to the struck sound: 0 = off
+   kParamRingPitch,         // the sine's offset from the note, octaves
    kParamCount
 };
 
@@ -93,6 +96,9 @@ static constexpr ParamSpec kParams[kParamCount] = {
    // Expression
    {"Press>Decay", "prsDecay", "oct", -4.0f, 4.0f,   0.0f,  false, false},
    {"Tmb>Tilt",   "tmbTilt",  "",    -3.0f,  3.0f,   0.0f,  false, false},
+   // Ring mod
+   {"Ring",       "ringLvl",  "",    0.0f,   1.0f,   0.0f,  false, false},
+   {"Ring Pitch", "ringPit",  "oct", -4.0f,  4.0f,   0.0f,  false, false},
 };
 
 // kParams is indexed by ParamIndex, so a swapped pair of rows compiles fine and silently cross-wires
@@ -117,7 +123,8 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
               && symbolIs(kParamFocus, "focus") && symbolIs(kParamFocusCentre, "focusCtr")
               && symbolIs(kParamFocusWidth, "focusWid")
               && symbolIs(kParamMpe, "mpe") && symbolIs(kParamPressToDecay, "prsDecay")
-              && symbolIs(kParamTimbreToTilt, "tmbTilt"),
+              && symbolIs(kParamTimbreToTilt, "tmbTilt")
+              && symbolIs(kParamRingLevel, "ringLvl") && symbolIs(kParamRingPitch, "ringPit"),
               "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------

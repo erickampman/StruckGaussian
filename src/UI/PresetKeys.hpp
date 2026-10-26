@@ -44,7 +44,19 @@ static constexpr PresetKey kPresetKeys[kParamCount] = {
    /*Mpe*/             {"Global",    "mpe"},
    /*PressToDecay*/    {"Expression", "pressToDecay"},
    /*TimbreToTilt*/    {"Expression", "timbreToTilt"},
+   /*RingLevel*/       {"Ring",      "level"},
+   /*RingPitch*/       {"Ring",      "pitch"},
 };
+
+// The array is sized kParamCount, so a param appended without a row here still compiles, as
+// {nullptr, nullptr}, and the preset loader then crashes building a key from it.
+constexpr bool presetKeysComplete()
+{
+   for (const PresetKey& k : kPresetKeys)
+      if (k.module == nullptr || k.item == nullptr) return false;
+   return true;
+}
+static_assert(presetKeysComplete(), "kPresetKeys is missing a row for a param");
 
 } // namespace struckgaussian
 

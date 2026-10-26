@@ -56,13 +56,15 @@ static inline Color colObject() { return Color(120, 190, 140); }
 static inline Color colDecay()  { return Color(168, 140, 214); }
 static inline Color colOutput() { return Color(214, 132, 96);  }
 static inline Color colExpression() { return Color(96, 186, 196); }
+static inline Color colRing()   { return Color(206, 120, 168); }
 
 // --------------------------------------------------------------------------------------------
 // ModalSpectrum — draws the current bank as vertical bars: x = mode frequency (log), height =
 // the amplitude each mode starts at (Focus included), opacity =
 // relative decay time (T60), so a long-ringing mode draws more solid. A thin line marks the
-// fundamental, since a cloud puts modes below it as well as above. It owns a
-// ModalBank core and reconfigures it from the modal params on every relevant change.
+// fundamental, since a cloud puts modes below it as well as above. With Ring up, each mode's two
+// ring-mod sidebands (|f ± fRing|, each Ring/2 of the mode) draw as thinner bars in the Ring colour.
+// It owns a ModalBank core and reconfigures it from the modal params on every relevant change.
 class ModalSpectrum : public NanoSubWidget
 {
 public:
@@ -77,12 +79,13 @@ public:
     // With Reseed on every note draws its own cloud; this shows the Seed's.
     void update(float centre, float width, int seed, bool keepFund, int modes, int stretchIdx,
                 float pitchOct, float decayT60, float dampTilt,
-                float focus, float focusCtr, float focusWid)
+                float focus, float focusCtr, float focusWid, float ringLevel, float ringPitch)
     {
         fCentre = centre; fWidth = width; fSeed = seed; fKeepFund = keepFund;
         fModes = modes; fStretchIdx = stretchIdx; fPitch = pitchOct;
         fDecayT60 = decayT60; fDampTilt = dampTilt;
         fFocus = focus; fFocusCtr = focusCtr; fFocusWid = focusWid;
+        fRingLevel = ringLevel; fRingPitch = ringPitch;
         recompute();
         repaint();
     }
@@ -127,6 +130,20 @@ protected:
         // Baseline.
         beginPath(); moveTo(x0, y1 + 3); lineTo(x1, y1 + 3);
         strokeColor(Color(70, 74, 82)); strokeWidth(1.0f); stroke();
+
+        // Ring sidebands first, so the modes draw over any that land on them.
+        Color side = colRing();
+        for (int i = 0; i < fSideCount; ++i)
+        {
+            const float lf = std::log2(fSideFreq[i]);
+            if (lf < fLo || lf > fHi) continue;
+            const float px  = x0 + (lf - fLo) / (fHi - fLo) * (x1 - x0);
+            const float amp = std::clamp(fSideAmp[i] / fAmpMax, 0.02f, 1.0f);
+            const float bh  = amp * plotH;
+            side.alpha = 0.3f + 0.5f * std::clamp(fSideT60[i] / fT60Max, 0.0f, 1.0f);
+            beginPath(); rect(px - 1.0f, y1 - bh, 2.0f, bh);
+            fillColor(side); fill();
+        }
 
         for (int i = 0; i < fCount; ++i)
         {
@@ -176,6 +193,31 @@ private:
             fT60Max  = std::max(fT60Max, fT60[i]);
         }
         if (fCount <= 0) { fMinFreq = 100.0f; fMaxFreq = 1000.0f; }
+
+        // Ring sidebands. The sine tracks the note but not the Pitch transpose, so on the nominal C3
+        // it sits at C3 + Ring Pitch. Each mode a·sin(f) times Ring·sin(fRing) gives Ring·a/2 at
+        // f + fRing and at |f - fRing| (a negative difference folds back through 0 Hz). The axis
+        // widens to take them in, but not below 20 Hz, where a near-zero difference would squash
+        // everything else.
+        fSideCount = 0;
+        if (fRingLevel > 0.0f)
+        {
+            const float fRing = 130.81f * std::exp2(fRingPitch);
+            for (int i = 0; i < fCount; ++i)
+            {
+                const float sides[2] = { fFreq[i] + fRing, std::fabs(fFreq[i] - fRing) };
+                for (float f : sides)
+                {
+                    if (f < 1.0f) continue;   // DC: nothing to draw on a log axis
+                    fSideFreq[fSideCount] = f;
+                    fSideAmp [fSideCount] = 0.5f * fRingLevel * fAmp[i];
+                    fSideT60 [fSideCount] = fT60[i];
+                    ++fSideCount;
+                    fMinFreq = std::min(fMinFreq, std::max(f, 20.0f));
+                    fMaxFreq = std::max(fMaxFreq, f);
+                }
+            }
+        }
     }
 
     ModalBank     fBank;
@@ -189,11 +231,16 @@ private:
     int   fModes = 16, fStretchIdx = 9;
     float fPitch = 0.0f, fDecayT60 = 2.0f, fDampTilt = 0.9f;
     float fFocus = 0.0f, fFocusCtr = 0.0f, fFocusWid = 0.5f;
+    float fRingLevel = 0.0f, fRingPitch = 0.0f;
 
     int   fCount = 0;
     float fFreq[ModalBank::kMaxModes] = {};
     float fT60 [ModalBank::kMaxModes] = {};
     float fAmp [ModalBank::kMaxModes] = {};
+    int   fSideCount = 0;
+    float fSideFreq[2 * ModalBank::kMaxModes] = {};
+    float fSideT60 [2 * ModalBank::kMaxModes] = {};
+    float fSideAmp [2 * ModalBank::kMaxModes] = {};
     float fMinFreq = 100.0f, fMaxFreq = 1000.0f, fT60Max = 1.0f, fAmpMax = 1.0f;
     float fF0 = 130.81f;
     bool  fHasFont = false;
@@ -211,7 +258,7 @@ public:
     StruckGaussianUI()
         : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT)
     {
-        setGeometryConstraints(864, 512, true, false); // lock the 1080:640 design ratio (0.8x min)
+        setGeometryConstraints(864, 624, true, false); // lock the 1080:780 design ratio (0.8x min)
         fHasFont = loadSharedResources();               // DPF's bundled DejaVu Sans for the title
 
         // DPF is only the GUI layer here: UIExporter set uiData->dspPtr (our clap_plugin_t) before
@@ -233,6 +280,11 @@ public:
         fDecayGroup  = makeGroup("Decay",  colDecay());
         fOutputGroup = makeGroup("Timbre", colOutput());
         fExpressionGroup = makeGroup("Expression", colExpression());
+        fRingGroup = makeGroup("Ring", colRing());
+        // The top row's panels lay their controls out two rows deep, so the spectrum beside them
+        // gets the width they give up.
+        for (GroupBox* g : { fStrikeGroup.get(), fRingGroup.get() })
+            g->setRows(2);
 
         // Build each param control into its panel, in panel order.
         for (uint32_t i = 0; i < kParamCount; ++i)
@@ -262,6 +314,13 @@ public:
                 fKnobs[i] = std::move(k);
             }
         }
+        // Global's two dropdowns share one column, MPE under Voices.
+        fGlobalGroup->stackUnder(fDropdowns[kParamVoiceMode].get(), fDropdowns[kParamMpe].get());
+        // Strike: the dropdowns in one column, Strike over Contact, and the velocity knobs side by
+        // side under Hardness: Strike | Hardness | (empty) over Contact | Vel>Level | Vel>Hard.
+        fStrikeGroup->arrange({ fDropdowns[kParamStrikeType].get(), fKnobs[kParamHardness].get(), nullptr,
+                                fDropdowns[kParamContactMode].get(), fKnobs[kParamVelToLevel].get(),
+                                fKnobs[kParamVelToHardness].get() });
 
         // Preset selector: applies to the whole patch, so it's parented to the UI (like fMenu)
         // and sits in the header strip, not in a GroupBox. Shares the generic Dropdown/PopupMenu
@@ -450,18 +509,21 @@ private:
         fHelpButton->setAbsolutePos(W - M - presetW - helpW, static_cast<int>(4 * s));
 
         // 3 rows under the header. Within a row the width is split by the cells each panel needs (its
-        // control count), so controls get similar widths everywhere instead of a 2-control panel taking
-        // half the window. Top: spectrum | Strike. Middle: Object | Decay. Bottom: Global | Timbre |
-        // Expression.
-        const int gridY = hdr;
-        const int gridH = H - gridY - M;
-        const int rowH  = (gridH - 2 * gap) / 3;
-        const int row0  = gridY, row1 = gridY + rowH + gap, row2 = gridY + 2 * (rowH + gap);
+        // column count), so controls get similar widths everywhere instead of a 2-control panel taking
+        // half the window. Top, its panels two control rows deep: spectrum | Strike | Ring. Middle:
+        // Object | Decay. Bottom: Global | Timbre | Expression. The top row is one title strip and
+        // padding short of two rows, so each of its control rows is as tall as a single row's.
+        const int gridY  = hdr;
+        const int gridH  = H - gridY - M;
+        const int chrome = static_cast<int>(38 * s);   // a GroupBox's title strip + bottom padding
+        const int rowH   = (gridH - 2 * gap + chrome) / 4;
+        const int row0H  = gridH - 2 * gap - 2 * rowH;
+        const int row0   = gridY, row1 = gridY + row0H + gap, row2 = row1 + rowH + gap;
 
-        auto cells = [](const GroupBox* g) { return std::max(1, g->controlCount()); };
+        auto cells = [](const GroupBox* g) { return std::max(1, g->columnCount()); };
         struct Slot { SubWidget* widget; int cells; };
         // Lay out one row left to right, each widget's width in proportion to its cells.
-        auto placeRow = [&](std::initializer_list<Slot> slots, int y) {
+        auto placeRow = [&](std::initializer_list<Slot> slots, int y, int h) {
             const int n = static_cast<int>(slots.size());
             const int rowW = W - 2 * M - (n - 1) * gap;   // the panels, without the gaps between them
             int total = 0;
@@ -471,23 +533,25 @@ private:
                 used += slot.cells;
                 const int right = rowW * used / total;   // cumulative, so rounding never drifts
                 slot.widget->setAbsolutePos(x, y);
-                slot.widget->setSize(static_cast<uint>(right - done), static_cast<uint>(rowH));
+                slot.widget->setSize(static_cast<uint>(right - done), static_cast<uint>(h));
                 x += (right - done) + gap;
                 done = right;
             }
         };
-        GroupBox* panels[6] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
-                                fDecayGroup.get(), fOutputGroup.get(), fExpressionGroup.get() };
+        GroupBox* panels[7] = { fGlobalGroup.get(), fStrikeGroup.get(), fObjectGroup.get(),
+                                fDecayGroup.get(), fOutputGroup.get(), fExpressionGroup.get(),
+                                fRingGroup.get() };
         for (GroupBox* g : panels) g->setUiScale(s);
 
-        // The spectrum holds no controls; it reads fine at about three control cells wide.
-        constexpr int kSpectrumCells = 3;
-        placeRow({ { fSpectrum.get(), kSpectrumCells }, { fStrikeGroup.get(), cells(fStrikeGroup.get()) } }, row0);
+        // The spectrum holds no controls: four cells, half the top row.
+        constexpr int kSpectrumCells = 4;
+        placeRow({ { fSpectrum.get(), kSpectrumCells }, { fStrikeGroup.get(), cells(fStrikeGroup.get()) },
+                   { fRingGroup.get(), cells(fRingGroup.get()) } }, row0, row0H);
         placeRow({ { fObjectGroup.get(), cells(fObjectGroup.get()) },
-                   { fDecayGroup.get(),  cells(fDecayGroup.get()) } }, row1);
+                   { fDecayGroup.get(),  cells(fDecayGroup.get()) } }, row1, rowH);
         placeRow({ { fGlobalGroup.get(), cells(fGlobalGroup.get()) },
                    { fOutputGroup.get(), cells(fOutputGroup.get()) },
-                   { fExpressionGroup.get(), cells(fExpressionGroup.get()) } }, row2);
+                   { fExpressionGroup.get(), cells(fExpressionGroup.get()) } }, row2, rowH);
 
         // Knob diameter bounded by the row height (room for label + value) and, via relayout, the
         // cell width. Dropdowns are sized to their cell by relayout(); we only set their scale.
@@ -524,6 +588,8 @@ private:
             return fDecayGroup.get();
         case kParamPressToDecay: case kParamTimbreToTilt:
             return fExpressionGroup.get();
+        case kParamRingLevel: case kParamRingPitch:
+            return fRingGroup.get();
         default:
             return fOutputGroup.get(); // strikePos, brightness, mix
         }
@@ -545,6 +611,8 @@ private:
             return colDecay();
         case kParamPressToDecay: case kParamTimbreToTilt:
             return colExpression();
+        case kParamRingLevel: case kParamRingPitch:
+            return colRing();
         default:
             return colOutput();
         }
@@ -566,7 +634,8 @@ private:
             || i == kParamCloudKeepFund || i == kParamModeCount || i == kParamStretch
             || i == kParamPitch || i == kParamDecayT60 || i == kParamDampTilt
             || i == kParamFocus
-            || i == kParamFocusCentre || i == kParamFocusWidth;
+            || i == kParamFocusCentre || i == kParamFocusWidth
+            || i == kParamRingLevel || i == kParamRingPitch;
     }
 
     void pushSpectrum()
@@ -578,7 +647,8 @@ private:
                           static_cast<int>(fValues[kParamStretch] + 0.5f),
                           fValues[kParamPitch], fValues[kParamDecayT60],
                           fValues[kParamDampTilt], fValues[kParamFocus],
-                          fValues[kParamFocusCentre], fValues[kParamFocusWidth]);
+                          fValues[kParamFocusCentre], fValues[kParamFocusWidth],
+                          fValues[kParamRingLevel], fValues[kParamRingPitch]);
     }
 
     static std::function<std::string(float)> formatterFor(uint32_t i)
@@ -601,7 +671,7 @@ private:
 
     std::unique_ptr<ModalSpectrum> fSpectrum;
     std::unique_ptr<GroupBox>      fGlobalGroup, fStrikeGroup, fObjectGroup, fDecayGroup, fOutputGroup,
-                                   fExpressionGroup;
+                                   fExpressionGroup, fRingGroup;
     std::unique_ptr<Knob>          fKnobs[kParamCount];
     std::unique_ptr<Dropdown>      fDropdowns[kParamCount];
     std::unique_ptr<PopupMenu>     fMenu;
@@ -755,7 +825,7 @@ bool gui_can_resize(const clap_plugin_t*) { return true; }
 
 bool gui_get_resize_hints(const clap_plugin_t*, clap_gui_resize_hints_t* hints)
 {
-    // The UI locks the 1080:640 design ratio via setGeometryConstraints(), so tell the host the same.
+    // The UI locks the 1080:780 design ratio via setGeometryConstraints(), so tell the host the same.
     hints->can_resize_horizontally = true;
     hints->can_resize_vertically   = true;
     hints->preserve_aspect_ratio   = true;
