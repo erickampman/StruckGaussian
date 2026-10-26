@@ -7,6 +7,7 @@
 #include "ModalBank.hpp"          // the framework-free core
 #include "ModalCloud.hpp"         // the Gaussian mode cloud
 #include "PitchConverter.hpp"
+#include "RingMod.hpp"
 #include "pm_midi.h"
 
 #include <algorithm>
@@ -43,10 +44,11 @@ struct ModalBankState {
     bool     trimDirty = true;
 
     // Ring mod: a free-running sine (its phase never resets on a strike, which would click a
-    // ringing note) and the level the last block ended at, so a moved knob ramps.
+    // ringing note) and the levels the last block ended at, so a moved knob ramps.
     double   sampleRate = 48000.0;
     double   ringPhase = 0.0;      // cycles, 0..1
-    float    ringLevel = 0.0f;
+    float    ringLevel = 0.0f, ringFeedback = 0.0f;
+    float    ringPrevL = 0.0f, ringPrevR = 0.0f;   // the last block's final output, for Ring Fb
 };
 
 // The in-phase peak of the Bar table at the plugin's defaults (C4, Strike
@@ -129,6 +131,7 @@ const void ResetModalBankModule(Module* module)
     if (auto* st = static_cast<ModalBankState*>(module->state)) {
         st->bank.reset();
         st->ringPhase = 0.0;
+        st->ringPrevL = st->ringPrevR = 0.0f;
     }
 }
 
@@ -264,27 +267,41 @@ const KPBuffPair* ProcessModalBankModule(uint64_t processCallID, uint32_t count,
     }
 
     // --- ring mod ----------------------------------------------------------
-    // out += L * out * sin: the ring-modulated signal is ADDED to the struck sound, which stays at
-    // full level, so Ring 0 leaves the bank untouched. The sine tracks the note (with bend) but not the Pitch transpose, plus its own
-    // offset. The level ramps across the block; the frequency is per block, phase-continuous.
-    const float ringTarget = std::clamp(module->getParamValue(ModalBankParamItemRingLevel), 0.0f, 1.0f);
-    if (ringTarget > 0.0f || st->ringLevel > 0.0f) {
+    // out += sin * (Ring * out + Ring Fb * clip(last output)): the ring mod's input is the struck
+    // sound plus the fed-back output, a one-sample loop whose sidebands go on to f +- 2 fRing,
+    // 3 fRing... (RingMod.hpp has the maths, and why Ring Fb stays below 1). The ring signal is
+    // ADDED, so with both at 0 the bank is untouched. The sine tracks the note (with bend) but not
+    // the Pitch transpose, plus its own offset. Both levels ramp across the block; the frequency is
+    // per block, phase-continuous.
+    const float ringTarget = ringLevelFor(module->getParamValue(ModalBankParamItemRingLevel));
+    const float fbTarget   = ringFeedbackFor(module->getParamValue(ModalBankParamItemRingFeedback));
+    if (ringTarget > 0.0f || st->ringLevel > 0.0f || fbTarget > 0.0f || st->ringFeedback > 0.0f) {
         const float  ringOct = pitchLevel * pitchIn + bendLevel * bendIn
                              + module->getParamValue(ModalBankParamItemRingPitch);
         const double inc     = module->pitchConverter->pitchToFrequency(ringOct) / st->sampleRate;
-        const float  step    = count > 0 ? (ringTarget - st->ringLevel) / (float)count : 0.0f;
-        float  l     = st->ringLevel;
+        const float  lStep   = count > 0 ? (ringTarget - st->ringLevel) / (float)count : 0.0f;
+        const float  fStep   = count > 0 ? (fbTarget - st->ringFeedback) / (float)count : 0.0f;
+        float  l = st->ringLevel, fb = st->ringFeedback;
         double phase = st->ringPhase;
+        float  prevL = st->ringPrevL, prevR = st->ringPrevR;
         for (uint32_t i = 0; i < count; ++i) {
-            l += step;
-            const float m = 1.0f + l * (float)std::sin(2.0 * M_PI * phase);
-            outL[i] *= m; outR[i] *= m;
+            l += lStep; fb += fStep;
+            const float sn = (float)std::sin(2.0 * M_PI * phase);
+            outL[i] += sn * (l * outL[i] + fb * std::clamp(prevL, -kRingFeedbackClip, kRingFeedbackClip));
+            outR[i] += sn * (l * outR[i] + fb * std::clamp(prevR, -kRingFeedbackClip, kRingFeedbackClip));
+            prevL = outL[i]; prevR = outR[i];
             phase += inc;
             if (phase >= 1.0) phase -= std::floor(phase);
         }
         st->ringPhase = phase;
+        // flush a decayed tail rather than recirculate denormals
+        st->ringPrevL = std::fabs(prevL) < 1e-20f ? 0.0f : prevL;
+        st->ringPrevR = std::fabs(prevR) < 1e-20f ? 0.0f : prevR;
+    } else {
+        st->ringPrevL = st->ringPrevR = 0.0f;
     }
     st->ringLevel = ringTarget;
+    st->ringFeedback = fbTarget;
 
     return &module->output;
 }

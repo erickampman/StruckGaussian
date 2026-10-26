@@ -61,6 +61,22 @@ its modes to ModalBank as a generated material (a stable buffer, `setMaterial`, 
 - `tools/cloudlab/` is the offline renderer the cloud was prototyped in, with its README of findings;
   it builds `ModalCloud.hpp` and `ModalBank.cpp` from `src/Module` in place.
 
+## The ring mod
+
+`src/Module/RingMod.hpp` holds what the ring mod does, for both sides: `ModalBankModule` runs
+`y = x + sin · (L · x + F · clip(y[n−1]))` per voice and channel, and the spectrum view draws it
+with `ringSpectrum()`.
+- **The view solves the loop; it doesn't use the slow-signal formula.** `x (1 + L sin) / (1 − F sin)`
+  is right only for F well below 1: near the sine's peak the loop remembers ~1/(1 − F) samples (50 at
+  0.98), as long as an audible period, and low-passes. `ringSpectrum()` solves the steady state as a
+  tridiagonal system per mode; it matches a simulated loop until the ±1 clip engages, which it
+  ignores.
+- **F stays below 1.** At 1 the loop has a pole on the unit circle; above it, it grows to the clip
+  and can keep a voice sounding after its note has died. `kRingFeedbackMax` (0.98) and Ring Fb's
+  max in `StruckGaussianParams.h` must agree.
+- **Ring 0 and Ring Fb 0 leave the bank untouched**, so presets made before the ring mod sound as
+  they did. The factory presets set all three ring params to 0.
+
 ## Dependencies
 
 The submodules are pinned (`tools/fetch_deps.sh`). Don't commit changes inside them. A fix needed in
@@ -123,7 +139,8 @@ src/Common/           shim + MIDI + params + utilities
                         ParamAddressMacros.h, CPPTypes.hpp, CPPProcs.hpp, KPBuffPairHelper.hpp
 src/Module/           Module core + modules
                         StrikeModule.*, ModalBank.* / ModalBankModule.* (+ ModalCloud, the mode
-                        cloud; ModalMaterials, ModalGenerators, ModalDiscretizer), Slew,
+                        cloud; RingMod, the ring mod's maths; ModalMaterials, ModalGenerators,
+                        ModalDiscretizer), Slew,
                         PitchConverter, Final; the
                         IFS / Sine / ADSR / LPF / CVMixer / Level / Combine modules inherited
                         from IFSynth stay instantiated but unconnected

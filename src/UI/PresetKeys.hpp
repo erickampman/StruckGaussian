@@ -46,6 +46,7 @@ static constexpr PresetKey kPresetKeys[kParamCount] = {
    /*TimbreToTilt*/    {"Expression", "timbreToTilt"},
    /*RingLevel*/       {"Ring",      "level"},
    /*RingPitch*/       {"Ring",      "pitch"},
+   /*RingFeedback*/    {"Ring",      "feedback"},
 };
 
 // The array is sized kParamCount, so a param appended without a row here still compiles, as

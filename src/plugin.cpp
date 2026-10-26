@@ -248,6 +248,7 @@ AUParameterAddress vmAddress(uint32_t paramIndex) {
     case kParamTimbreToTilt:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemDampTiltModLevel);
     case kParamRingLevel:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemRingLevel);
     case kParamRingPitch:      return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemRingPitch);
+    case kParamRingFeedback:   return MODULE_PARAM_ADDRESS(ModuleParamKindModalBank, ModuleInstance1, ModalBankParamItemRingFeedback);
     default:                   return 0;
     }
 }

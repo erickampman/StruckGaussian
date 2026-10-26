@@ -49,6 +49,7 @@ enum ParamIndex {
    // --- Ring mod (appended, experimental): adds the output times a sine that tracks the note ---
    kParamRingLevel,         // the ring-modulated signal added to the struck sound: 0 = off
    kParamRingPitch,         // the sine's offset from the note, octaves
+   kParamRingFeedback,      // the last output sample fed into the ring mod too: 0 = off, < 1 always
    kParamCount
 };
 
@@ -99,6 +100,7 @@ static constexpr ParamSpec kParams[kParamCount] = {
    // Ring mod
    {"Ring",       "ringLvl",  "",    0.0f,   1.0f,   0.0f,  false, false},
    {"Ring Pitch", "ringPit",  "oct", -4.0f,  4.0f,   0.0f,  false, false},
+   {"Ring Fb",    "ringFb",   "",    0.0f,   0.98f,  0.0f,  false, false},   // max = kRingFeedbackMax
 };
 
 // kParams is indexed by ParamIndex, so a swapped pair of rows compiles fine and silently cross-wires
@@ -124,7 +126,8 @@ static_assert(symbolIs(kParamVoiceMode, "voices") && symbolIs(kParamGlide, "glid
               && symbolIs(kParamFocusWidth, "focusWid")
               && symbolIs(kParamMpe, "mpe") && symbolIs(kParamPressToDecay, "prsDecay")
               && symbolIs(kParamTimbreToTilt, "tmbTilt")
-              && symbolIs(kParamRingLevel, "ringLvl") && symbolIs(kParamRingPitch, "ringPit"),
+              && symbolIs(kParamRingLevel, "ringLvl") && symbolIs(kParamRingPitch, "ringPit")
+              && symbolIs(kParamRingFeedback, "ringFb"),
               "kParams rows are out of ParamIndex order");
 
 // --- dropdowns -------------------------------------------------------------------------------

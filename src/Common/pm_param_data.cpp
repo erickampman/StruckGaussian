@@ -290,6 +290,7 @@ static const ModuleParamConstants modalBankConstants[] = {
    {"cloudFocusWidth", ModalBankParamItemCloudFocusWidth, 0, 0, nullptr, 0.05f, 3.0f, 0.5f, 0},
    {"ringLevel",      ModalBankParamItemRingLevel,      0, 0, nullptr, 0.0f, 1.0f, 0.0f, 0},
    {"ringPitch",      ModalBankParamItemRingPitch,      0, 0, nullptr, -4.0f, 4.0f, 0.0f, 0},
+   {"ringFeedback",   ModalBankParamItemRingFeedback,   0, 0, nullptr, 0.0f, 0.98f, 0.0f, 0}, // max = kRingFeedbackMax
 };
 const ModuleParamConstantsGroup modalBankConstantsGroup = {
    const_cast<char*>("modalBank"), sizeof(modalBankConstants) / sizeof(modalBankConstants[0]), modalBankConstants};

@@ -32,6 +32,7 @@
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
 #include "ModalCloud.hpp"       // the Gaussian mode cloud, as ModalBankModule draws it
 #include "ModalMaterials.hpp"   // kModalStretchValues
+#include "RingMod.hpp"          // the ring mod's sidebands, as ModalBankModule makes them
 #include "CPPTypes.hpp"         // DEFAULT_SAMPLE_RATE (the UIExporter's nominal rate below)
 #include "StruckGaussianParams.h"
 #include "plugin_gui.h"         // the C seam to src/plugin.cpp (the raw CLAP plugin)
@@ -62,8 +63,10 @@ static inline Color colRing()   { return Color(206, 120, 168); }
 // ModalSpectrum — draws the current bank as vertical bars: x = mode frequency (log), height =
 // the amplitude each mode starts at (Focus included), opacity =
 // relative decay time (T60), so a long-ringing mode draws more solid. A thin line marks the
-// fundamental, since a cloud puts modes below it as well as above. With Ring up, each mode's two
-// ring-mod sidebands (|f ± fRing|, each Ring/2 of the mode) draw as thinner bars in the Ring colour.
+// fundamental, since a cloud puts modes below it as well as above. With Ring up, each mode's ring-mod
+// sidebands draw as thinner bars in the Ring colour: one pair from Ring, a series running on from
+// there with Ring Fb (RingMod.hpp). Those are binned one per pixel column, the loudest kept, so a dense
+// feedback spectrum costs one bar per pixel however many sidebands land there.
 // It owns a ModalBank core and reconfigures it from the modal params on every relevant change.
 class ModalSpectrum : public NanoSubWidget
 {
@@ -79,13 +82,14 @@ public:
     // With Reseed on every note draws its own cloud; this shows the Seed's.
     void update(float centre, float width, int seed, bool keepFund, int modes, int stretchIdx,
                 float pitchOct, float decayT60, float dampTilt,
-                float focus, float focusCtr, float focusWid, float ringLevel, float ringPitch)
+                float focus, float focusCtr, float focusWid, float ringLevel, float ringPitch,
+                float ringFeedback)
     {
         fCentre = centre; fWidth = width; fSeed = seed; fKeepFund = keepFund;
         fModes = modes; fStretchIdx = stretchIdx; fPitch = pitchOct;
         fDecayT60 = decayT60; fDampTilt = dampTilt;
         fFocus = focus; fFocusCtr = focusCtr; fFocusWid = focusWid;
-        fRingLevel = ringLevel; fRingPitch = ringPitch;
+        fRingLevel = ringLevel; fRingPitch = ringPitch; fRingFeedback = ringFeedback;
         recompute();
         repaint();
     }
@@ -131,18 +135,30 @@ protected:
         beginPath(); moveTo(x0, y1 + 3); lineTo(x1, y1 + 3);
         strokeColor(Color(70, 74, 82)); strokeWidth(1.0f); stroke();
 
-        // Ring sidebands first, so the modes draw over any that land on them.
-        Color side = colRing();
-        for (int i = 0; i < fSideCount; ++i)
+        // Ring sidebands first, so the modes draw over any that land on them: binned per pixel
+        // column, the loudest in each kept (with its T60, for the opacity).
+        if (fSideCount > 0)
         {
-            const float lf = std::log2(fSideFreq[i]);
-            if (lf < fLo || lf > fHi) continue;
-            const float px  = x0 + (lf - fLo) / (fHi - fLo) * (x1 - x0);
-            const float amp = std::clamp(fSideAmp[i] / fAmpMax, 0.02f, 1.0f);
-            const float bh  = amp * plotH;
-            side.alpha = 0.3f + 0.5f * std::clamp(fSideT60[i] / fT60Max, 0.0f, 1.0f);
-            beginPath(); rect(px - 1.0f, y1 - bh, 2.0f, bh);
-            fillColor(side); fill();
+            const int cols = std::max(1, static_cast<int>(x1 - x0) + 1);
+            fColAmp.assign(cols, 0.0f);
+            fColT60.assign(cols, 0.0f);
+            for (int i = 0; i < fSideCount; ++i)
+            {
+                const float lf = std::log2(fSideFreq[i]);
+                if (lf < fLo || lf > fHi) continue;
+                const int c = std::clamp(static_cast<int>((lf - fLo) / (fHi - fLo) * (x1 - x0) + 0.5f), 0, cols - 1);
+                if (fSideAmp[i] > fColAmp[c]) { fColAmp[c] = fSideAmp[i]; fColT60[c] = fSideT60[i]; }
+            }
+            Color side = colRing();
+            for (int c = 0; c < cols; ++c)
+            {
+                if (fColAmp[c] <= 0.0f) continue;
+                const float amp = std::clamp(fColAmp[c] / fAmpMax, 0.02f, 1.0f);
+                const float bh  = amp * plotH;
+                side.alpha = 0.3f + 0.5f * std::clamp(fColT60[c] / fT60Max, 0.0f, 1.0f);
+                beginPath(); rect(x0 + c - 0.75f, y1 - bh, 1.5f, bh);
+                fillColor(side); fill();
+            }
         }
 
         for (int i = 0; i < fCount; ++i)
@@ -195,26 +211,49 @@ private:
         if (fCount <= 0) { fMinFreq = 100.0f; fMaxFreq = 1000.0f; }
 
         // Ring sidebands. The sine tracks the note but not the Pitch transpose, so on the nominal C3
-        // it sits at C3 + Ring Pitch. Each mode a·sin(f) times Ring·sin(fRing) gives Ring·a/2 at
-        // f + fRing and at |f - fRing| (a negative difference folds back through 0 Hz). The axis
-        // widens to take them in, but not below 20 Hz, where a near-zero difference would squash
-        // everything else.
+        // it sits at C3 + Ring Pitch. ringSpectrum gives each mode's components at f + k fRing; a
+        // negative frequency folds back through 0 Hz, and above Nyquist it aliases back down, as it
+        // does in the audio. With Ring Fb the loop also changes each mode's own level (more on low
+        // modes than high), so the mode bars are rescaled by it too; the bars stay relative to the
+        // loudest mode, so the overall rise in level is not shown. Components under 0.005 of the
+        // loudest are dropped (a bar's floor is 0.02). The axis widens to take in the first order, but
+        // not below 20 Hz, where a near-zero difference would squash everything else; higher orders
+        // draw where they fall inside it.
         fSideCount = 0;
-        if (fRingLevel > 0.0f)
+        if (fRingLevel > 0.0f || fRingFeedback > 0.0f)
         {
             const float fRing = 130.81f * std::exp2(fRingPitch);
+            const float fs = 48000.0f, nyq = 0.5f * fs;   // fBank's rate
+            auto fold = [&](float f) {
+                f = std::fmod(std::fabs(f), fs);
+                return f > nyq ? fs - f : f;
+            };
+            float (&mags)[kRingModesCap][2 * kRingOrders + 1] = fRingMags;
+            fAmpMax = 1e-6f;
             for (int i = 0; i < fCount; ++i)
             {
-                const float sides[2] = { fFreq[i] + fRing, std::fabs(fFreq[i] - fRing) };
-                for (float f : sides)
+                ringSpectrum<kRingOrders>(fRingLevel, fRingFeedback, fFreq[i], fRing, fs, mags[i]);
+                fAmpMax = std::max(fAmpMax, fAmp[i] * mags[i][kRingOrders]);
+            }
+            for (int i = 0; i < fCount; ++i)
+            {
+                const float a = fAmp[i];   // the mode before the loop's gain on it
+                fAmp[i] *= mags[i][kRingOrders];
+                for (int k = -kRingOrders; k <= kRingOrders; ++k)
                 {
+                    const float amp = a * mags[i][kRingOrders + k];
+                    if (k == 0 || amp < 0.005f * fAmpMax) continue;
+                    const float f = fold(fFreq[i] + k * fRing);
                     if (f < 1.0f) continue;   // DC: nothing to draw on a log axis
                     fSideFreq[fSideCount] = f;
-                    fSideAmp [fSideCount] = 0.5f * fRingLevel * fAmp[i];
+                    fSideAmp [fSideCount] = amp;
                     fSideT60 [fSideCount] = fT60[i];
                     ++fSideCount;
-                    fMinFreq = std::min(fMinFreq, std::max(f, 20.0f));
-                    fMaxFreq = std::max(fMaxFreq, f);
+                    if (k == 1 || k == -1)
+                    {
+                        fMinFreq = std::min(fMinFreq, std::max(f, 20.0f));
+                        fMaxFreq = std::max(fMaxFreq, f);
+                    }
                 }
             }
         }
@@ -232,15 +271,22 @@ private:
     float fPitch = 0.0f, fDecayT60 = 2.0f, fDampTilt = 0.9f;
     float fFocus = 0.0f, fFocusCtr = 0.0f, fFocusWid = 0.5f;
     float fRingLevel = 0.0f, fRingPitch = 0.0f;
+    float fRingFeedback = 0.0f;
 
     int   fCount = 0;
     float fFreq[ModalBank::kMaxModes] = {};
     float fT60 [ModalBank::kMaxModes] = {};
     float fAmp [ModalBank::kMaxModes] = {};
+    // ringSpectrum's truncation: at Ring 0.98 order 40 is ~1e-4, well under what a bar shows.
+    static constexpr int kRingOrders = 40;
+    static constexpr int kRingModesCap = ModalBank::kMaxModes;
+    static constexpr int kMaxSides = 2 * kRingOrders * kRingModesCap;
     int   fSideCount = 0;
-    float fSideFreq[2 * ModalBank::kMaxModes] = {};
-    float fSideT60 [2 * ModalBank::kMaxModes] = {};
-    float fSideAmp [2 * ModalBank::kMaxModes] = {};
+    float fSideFreq[kMaxSides] = {};
+    float fSideT60 [kMaxSides] = {};
+    float fSideAmp [kMaxSides] = {};
+    float fRingMags[kRingModesCap][2 * kRingOrders + 1] = {};   // recompute()'s per-mode ringSpectrum
+    std::vector<float> fColAmp, fColT60;   // onNanoDisplay's per-pixel bins
     float fMinFreq = 100.0f, fMaxFreq = 1000.0f, fT60Max = 1.0f, fAmpMax = 1.0f;
     float fF0 = 130.81f;
     bool  fHasFont = false;
@@ -321,6 +367,9 @@ public:
         fStrikeGroup->arrange({ fDropdowns[kParamStrikeType].get(), fKnobs[kParamHardness].get(), nullptr,
                                 fDropdowns[kParamContactMode].get(), fKnobs[kParamVelToLevel].get(),
                                 fKnobs[kParamVelToHardness].get() });
+        // Ring: the two levels side by side, Ring Pitch under Ring.
+        fRingGroup->arrange({ fKnobs[kParamRingLevel].get(), fKnobs[kParamRingFeedback].get(),
+                              fKnobs[kParamRingPitch].get(), nullptr });
 
         // Preset selector: applies to the whole patch, so it's parented to the UI (like fMenu)
         // and sits in the header strip, not in a GroupBox. Shares the generic Dropdown/PopupMenu
@@ -588,7 +637,7 @@ private:
             return fDecayGroup.get();
         case kParamPressToDecay: case kParamTimbreToTilt:
             return fExpressionGroup.get();
-        case kParamRingLevel: case kParamRingPitch:
+        case kParamRingLevel: case kParamRingPitch: case kParamRingFeedback:
             return fRingGroup.get();
         default:
             return fOutputGroup.get(); // strikePos, brightness, mix
@@ -611,7 +660,7 @@ private:
             return colDecay();
         case kParamPressToDecay: case kParamTimbreToTilt:
             return colExpression();
-        case kParamRingLevel: case kParamRingPitch:
+        case kParamRingLevel: case kParamRingPitch: case kParamRingFeedback:
             return colRing();
         default:
             return colOutput();
@@ -635,7 +684,7 @@ private:
             || i == kParamPitch || i == kParamDecayT60 || i == kParamDampTilt
             || i == kParamFocus
             || i == kParamFocusCentre || i == kParamFocusWidth
-            || i == kParamRingLevel || i == kParamRingPitch;
+            || i == kParamRingLevel || i == kParamRingPitch || i == kParamRingFeedback;
     }
 
     void pushSpectrum()
@@ -648,7 +697,8 @@ private:
                           fValues[kParamPitch], fValues[kParamDecayT60],
                           fValues[kParamDampTilt], fValues[kParamFocus],
                           fValues[kParamFocusCentre], fValues[kParamFocusWidth],
-                          fValues[kParamRingLevel], fValues[kParamRingPitch]);
+                          fValues[kParamRingLevel], fValues[kParamRingPitch],
+                          fValues[kParamRingFeedback]);
     }
 
     static std::function<std::string(float)> formatterFor(uint32_t i)

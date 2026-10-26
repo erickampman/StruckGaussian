@@ -50,6 +50,11 @@ note-off.
   note-on with velocity 0 is a note-on, as the spec says; Vel>Level decides how loud it is.
 - **ModalBank** (resonator): up to 64 modes from the Gaussian cloud (above), stretch, decay (T60),
   damping tilt, loudness Focus, stereo spread.
+- **Ring** (experimental): a ring modulator on each voice, a sine at the note (Ring Pitch octaves
+  from it) whose product is **added** to the struck sound: `y = x + sin · (Ring · x + Ring Fb ·
+  clip(y[n−1]))`. Ring alone gives each mode one pair of sidebands; Ring Fb feeds the output back
+  through a one-sample loop, so the sidebands run on in steps of the sine's frequency. Ring Fb stops
+  at 0.98, short of the loop's pole. The spectrum draws the sidebands, solved exactly (`src/Module/RingMod.hpp`).
 - **Voices**: Poly 10, Poly 20, Poly 32, or Mono (legato, with glide).
 - **Presets**: eight cloud presets and Init in `Presets/*.json`, baked into the plugin at build
   time.

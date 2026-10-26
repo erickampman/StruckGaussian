@@ -400,6 +400,8 @@ enum ModalBankParamItem : NSUInteger {
    // the Pitch transpose not) plus an offset.
    ModalBankParamItemRingLevel,        // output * sine, ADDED to the output: 0 = off
    ModalBankParamItemRingPitch,        // the sine's offset from the note, octaves
+   ModalBankParamItemRingFeedback,     // the LAST output sample, ring modulated and added too; held
+                                       // below 1 (kRingFeedbackMax, RingMod.hpp)
 };
 
 // Material selector for ModalBankParamItemMaterial. Order MUST match kModalMaterials

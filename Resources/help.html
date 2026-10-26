@@ -269,7 +269,7 @@ th { background: rgba(0, 0, 0, 0.04); }
 <div class="callout-content">
 <h2>On This Page</h2>
 <p><a href="#overview">Overview</a> · <a href="#getting-started">Getting Started</a> · <a href="#panel">The Panel</a></p>
-<p><strong>The controls —</strong> <a href="#spectrum">The Spectrum</a> · <a href="#strike">Strike</a> · <a href="#object">Object</a> · <a href="#decay">Decay</a> · <a href="#global">Global</a> · <a href="#timbre">Timbre</a> · <a href="#expression">Expression</a></p>
+<p><strong>The controls —</strong> <a href="#spectrum">The Spectrum</a> · <a href="#strike">Strike</a> · <a href="#ring">Ring</a> · <a href="#object">Object</a> · <a href="#decay">Decay</a> · <a href="#global">Global</a> · <a href="#timbre">Timbre</a> · <a href="#expression">Expression</a></p>
 <p><strong>Playing —</strong> <a href="#voices-midi">Voices and MIDI</a> · <a href="#presets">Presets</a> · <a href="#tips">Tips</a> · <a href="#troubleshooting">Troubleshooting</a></p>
 </div>
 </div>
@@ -307,12 +307,12 @@ th { background: rgba(0, 0, 0, 0.04); }
 <p><strong>The header:</strong> the Unlikelyware logo (a click opens unlikelyware.com), the title, and the <strong>Preset</strong> menu.</p>
 <p><strong>Below it, three rows:</strong></p>
 <ul>
-<li><strong>Top:</strong> the <a href="#spectrum">spectrum</a>, and the <strong>Strike</strong> panel.</li>
+<li><strong>Top:</strong> the <a href="#spectrum">spectrum</a>, and the <strong>Strike</strong> and <strong>Ring</strong> panels, whose controls are laid out two rows deep.</li>
 <li><strong>Middle:</strong> <strong>Object</strong> and <strong>Decay</strong>.</li>
-<li><strong>Bottom:</strong> <strong>Global</strong>, <strong>Timbre</strong> and <strong>Expression</strong>.</li>
+<li><strong>Bottom:</strong> <strong>Global</strong>, <strong>Timbre</strong> and <strong>Expression</strong>. Global's two menus, Voices and MPE, share its first column.</li>
 </ul>
-<p>Each panel has its own colour: steel for Global, amber for Strike, green for Object, violet for Decay, copper for Timbre and teal for Expression. Each knob shows its name above it and its value below.</p>
-<p><strong>Resizing:</strong> drag the host window's corner. The panel keeps its shape (1080 × 640) and scales everything in it; the smallest size is 864 × 512.</p>
+<p>Each panel has its own colour: steel for Global, amber for Strike, pink for Ring, green for Object, violet for Decay, copper for Timbre and teal for Expression. Each knob shows its name above it and its value below.</p>
+<p><strong>Resizing:</strong> drag the host window's corner. The panel keeps its shape (1080 × 780) and scales everything in it; the smallest size is 864 × 624.</p>
 </div>
 </div>
 <details class="disclosure">
@@ -338,6 +338,7 @@ th { background: rgba(0, 0, 0, 0.04); }
 <li><strong>Across:</strong> each mode's frequency, on a logarithmic scale, so octaves are equal widths. The axis is centred on the note's pitch, marked by a thin line labelled <strong>f0</strong>, so modes below the note and above it are easy to tell apart, and the line stays put as Width changes.</li>
 <li><strong>Height:</strong> how loud each mode starts, relative to the loudest. Focus is what shapes this.</li>
 <li><strong>Opacity:</strong> how long each mode rings. A more solid bar outlasts a fainter one.</li>
+<li><strong>Thin pink bars:</strong> with <strong>Ring</strong> or <strong>Ring Fb</strong> up, the new frequencies the <a href="#ring">ring mod</a> adds. They're worked out exactly, feedback included. Where several land on the same spot, the loudest is drawn. Ones that would go past half the sample rate are drawn where they fold back down, as they do in the sound.</li>
 </ul>
 <p>It's drawn for a nominal C3 (moved by <strong>Pitch</strong>), for the <strong>Seed</strong>'s cloud: with <strong>Reseed</strong> on, every note you play draws a different one. It holds no controls.</p>
 </div>
@@ -357,6 +358,18 @@ th { background: rgba(0, 0, 0, 0.04); }
 <li><strong>Wall-Clk</strong>: in fixed time, up to 20 ms at Hardness 1, like a real mallet: low notes come out fuller and high notes brighter and more percussive.</li>
 </ul></li>
 </ul>
+</div>
+</div>
+<div class="callout callout-note card">
+<div class="callout-content">
+<h2 id="ring">Ring</h2>
+<p>An experimental ring modulator on each voice. It multiplies the sound by a sine that follows the note, and <strong>adds</strong> the result to the struck sound, which stays at full level. With both levels at 0 (the default) it does nothing.</p>
+<ul>
+<li><strong>Ring</strong> (0–1, default 0): how much of the struck sound, times the sine, is added. Each mode gains two new frequencies: the mode plus the sine's frequency, and the mode minus it (folded back through 0 Hz when the sine is higher). At <strong>1</strong> each is half the mode's level.</li>
+<li><strong>Ring Fb</strong> (0–0.98, default 0): feeds the output back into the ring modulator, one sample later. Each trip round adds the sine's frequency again, so the new frequencies go on in steps: the mode ± 1, 2, 3… times the sine's frequency. Higher Ring Fb makes the series longer and buzzier and raises the level, more on low modes than high, so watch <strong>Level</strong>. It stops short of 1, where the loop would run away. It works with Ring at 0 too.</li>
+<li><strong>Ring Pitch</strong> (−4 to +4 oct, default 0): the sine's pitch, in octaves from the note. The sine follows the played note and pitch bend, but not the Object panel's <strong>Pitch</strong>. At <strong>0</strong> the sine is the note itself, so the note's own mode (with <strong>Keep Fund</strong> on) gains its octave, plus a DC offset you can't hear. Whole octaves (<strong>±1</strong>) keep the new frequencies tied to the note; other settings add tones unrelated to it. Since a cloud's modes aren't harmonics of the note, their new frequencies are inharmonic whatever the setting.</li>
+</ul>
+<p>The fed-back signal is limited to ±1, so very loud notes with Ring Fb near the top distort. The spectrum doesn't show that distortion.</p>
 </div>
 </div>
 <div class="callout callout-note card">
@@ -512,7 +525,7 @@ th { background: rgba(0, 0, 0, 0.04); }
 <tr><td>Wood Cluster</td><td>10 modes, Width 0.35</td><td>0.5 s</td><td>Heavy damping: a short, woody knock</td></tr>
 </tbody></table>
 <ul>
-<li><strong>Choosing a preset sets every sound parameter</strong>, Voices and the Expression knobs included. It leaves the <strong>MPE</strong> switch alone.</li>
+<li><strong>Choosing a preset sets every sound parameter</strong>, Voices, the Expression knobs and Ring included (every factory preset has Ring off). It leaves the <strong>MPE</strong> switch alone.</li>
 <li>The menu shows <strong>--</strong> until you choose one, and again when the editor is reopened. Changing a knob after choosing a preset doesn't change the name shown.</li>
 <li>There's no way to save your own presets in StruckGaussian: the host saves the patch with its project, and most hosts can save a plugin's state as their own preset.</li>
 </ul>
@@ -532,6 +545,7 @@ th { background: rgba(0, 0, 0, 0.04); }
 <li><strong>Fewer Modes</strong> makes a simpler sound, and costs less CPU.</li>
 <li><strong>For an even keyboard</strong>, keep <strong>Contact</strong> on Note-Rel. Wall-Clk makes the bass boomier and the top pingier, as real mallets do.</li>
 <li><strong>For a hand-damped object on a pressure controller</strong>, set Press&gt;Decay negative: press into a note to stop it.</li>
+<li><strong>Ring Pitch in whole octaves</strong> (0, ±1) ties the ring mod to the note; anything else pulls the sound towards a clang. Add <strong>Ring Fb</strong> slowly: the top of its range is much louder.</li>
 </ul>
 </div>
 </div>
@@ -549,7 +563,7 @@ th { background: rgba(0, 0, 0, 0.04); }
 <li><strong>Focus doesn't change a held note.</strong> It's read at the strike; play the next note.</li>
 <li><strong>The Expression knobs do nothing.</strong> The controller isn't sending pressure or CC 74, or the knobs are at 0.</li>
 <li><strong>Bends are huge.</strong> MPE is on and the controller isn't an MPE controller: member channels bend ±48 semitones. Turn <strong>MPE</strong> off.</li>
-<li><strong>Distortion.</strong> Lower <strong>Level</strong>. Many loud notes ringing together add up.</li>
+<li><strong>Distortion.</strong> Lower <strong>Level</strong>. Many loud notes ringing together add up. With <strong>Ring Fb</strong> near the top, the feedback limit distorts loud notes too; lower Ring Fb or Level.</li>
 <li><strong>A rebuilt StruckGaussian doesn't show its changes.</strong> Quit and restart the host: a running host keeps the plugin it loaded first.</li>
 </ul>
 </div>

@@ -60,6 +60,21 @@ the measurements). Decided 2026-10-25:
       ss-bend checks both. The other synths have one or both: ReleaseUMP R2-12, R2-13
 - [ ] macOS: build, auval (aumu StGa nLKL)
 
+## Experiment: ring mod (2026-10-26)
+A sine at the note, ring modulating each voice, its product added to the struck sound (src/Module/RingMod.hpp).
+- [x] Ring (0-1) and Ring Pitch (-4..+4 oct, from the note with bend, not the Pitch transpose). Added, not crossfaded:
+      the struck sound keeps its level. Free-running phase, reset only on voice allocation, so a re-strike can't click
+- [x] Ring Fb (0-0.98): the last output sample, clipped to +-1, fed into the ring mod too, so sidebands run on in
+      steps of fRing. Capped short of the pole at 1 (above it the loop grows to the clip and outlives the note)
+- [x] The spectrum draws the sidebands: one pair from Ring, the series from Ring Fb, solved per mode as a tridiagonal
+      system (the slow-signal formula x(1 + L sin)/(1 - F sin) overstates high modes once F nears 1: the one-sample
+      loop low-passes). Matches a simulated loop until the clip engages. Binned one bar per pixel column; aliases
+      drawn where they fold
+- [x] Panel: 1080x780; Strike and Ring two rows deep on the top row, beside the spectrum; Global stacks Voices and MPE
+- [x] Factory presets set the ring params to 0. Fixed on the way: the preset loader crashed while PresetKeys lacked
+      rows for new params; a static_assert now catches a missing row
+- [ ] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh)
+
 ## Tests
 - all: cmake --build build -j && ctest --test-dir build --output-on-failure
 

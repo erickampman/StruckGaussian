@@ -13,7 +13,7 @@
 ## On This Page
 [Overview](#overview) · [Getting Started](#getting-started) · [The Panel](#panel)
 
-**The controls —** [The Spectrum](#spectrum) · [Strike](#strike) · [Object](#object) · [Decay](#decay) · [Global](#global) · [Timbre](#timbre) · [Expression](#expression)
+**The controls —** [The Spectrum](#spectrum) · [Strike](#strike) · [Ring](#ring) · [Object](#object) · [Decay](#decay) · [Global](#global) · [Timbre](#timbre) · [Expression](#expression)
 
 **Playing —** [Voices and MIDI](#voices-midi) · [Presets](#presets) · [Tips](#tips) · [Troubleshooting](#troubleshooting)
 ~~~
@@ -48,13 +48,13 @@ The host saves every parameter with its project.
 **The header:** the Unlikelyware logo (a click opens unlikelyware.com), the title, and the **Preset** menu.
 
 **Below it, three rows:**
-- **Top:** the [spectrum](#spectrum), and the **Strike** panel.
+- **Top:** the [spectrum](#spectrum), and the **Strike** and **Ring** panels, whose controls are laid out two rows deep.
 - **Middle:** **Object** and **Decay**.
-- **Bottom:** **Global**, **Timbre** and **Expression**.
+- **Bottom:** **Global**, **Timbre** and **Expression**. Global's two menus, Voices and MPE, share its first column.
 
-Each panel has its own colour: steel for Global, amber for Strike, green for Object, violet for Decay, copper for Timbre and teal for Expression. Each knob shows its name above it and its value below.
+Each panel has its own colour: steel for Global, amber for Strike, pink for Ring, green for Object, violet for Decay, copper for Timbre and teal for Expression. Each knob shows its name above it and its value below.
 
-**Resizing:** drag the host window's corner. The panel keeps its shape (1080 × 640) and scales everything in it; the smallest size is 864 × 512.
+**Resizing:** drag the host window's corner. The panel keeps its shape (1080 × 780) and scales everything in it; the smallest size is 864 × 624.
 ~~~
 ~~~disclosure Knobs and menus [disclosure-title subtle]
 | Gesture | Result |
@@ -74,6 +74,7 @@ The display at the top left draws the current cloud's modes as bars:
 - **Across:** each mode's frequency, on a logarithmic scale, so octaves are equal widths. The axis is centred on the note's pitch, marked by a thin line labelled **f0**, so modes below the note and above it are easy to tell apart, and the line stays put as Width changes.
 - **Height:** how loud each mode starts, relative to the loudest. Focus is what shapes this.
 - **Opacity:** how long each mode rings. A more solid bar outlasts a fainter one.
+- **Thin pink bars:** with **Ring** or **Ring Fb** up, the new frequencies the [ring mod](#ring) adds. They're worked out exactly, feedback included. Where several land on the same spot, the loudest is drawn. Ones that would go past half the sample rate are drawn where they fold back down, as they do in the sound.
 
 It's drawn for a nominal C3 (moved by **Pitch**), for the **Seed**'s cloud: with **Reseed** on, every note you play draws a different one. It holds no controls.
 ~~~
@@ -88,6 +89,16 @@ The exciter: what hits the object, and how hard.
 - **Contact** (Note-Rel / Wall-Clk): how the contact length is measured.
   - **Note-Rel** (default): in periods of the played note. At Hardness 1 the contact spans 1.6 periods, so the strike sits at the same place relative to the fundamental on every key, and level and tone stay even across the keyboard. (Capped at 100 ms, which matters only below about 25 Hz.)
   - **Wall-Clk**: in fixed time, up to 20 ms at Hardness 1, like a real mallet: low notes come out fuller and high notes brighter and more percussive.
+~~~
+~~~note [card]
+(#ring)
+## Ring
+An experimental ring modulator on each voice. It multiplies the sound by a sine that follows the note, and **adds** the result to the struck sound, which stays at full level. With both levels at 0 (the default) it does nothing.
+- **Ring** (0–1, default 0): how much of the struck sound, times the sine, is added. Each mode gains two new frequencies: the mode plus the sine's frequency, and the mode minus it (folded back through 0 Hz when the sine is higher). At **1** each is half the mode's level.
+- **Ring Fb** (0–0.98, default 0): feeds the output back into the ring modulator, one sample later. Each trip round adds the sine's frequency again, so the new frequencies go on in steps: the mode ± 1, 2, 3… times the sine's frequency. Higher Ring Fb makes the series longer and buzzier and raises the level, more on low modes than high, so watch **Level**. It stops short of 1, where the loop would run away. It works with Ring at 0 too.
+- **Ring Pitch** (−4 to +4 oct, default 0): the sine's pitch, in octaves from the note. The sine follows the played note and pitch bend, but not the Object panel's **Pitch**. At **0** the sine is the note itself, so the note's own mode (with **Keep Fund** on) gains its octave, plus a DC offset you can't hear. Whole octaves (**±1**) keep the new frequencies tied to the note; other settings add tones unrelated to it. Since a cloud's modes aren't harmonics of the note, their new frequencies are inharmonic whatever the setting.
+
+The fed-back signal is limited to ±1, so very loud notes with Ring Fb near the top distort. The spectrum doesn't show that distortion.
 ~~~
 ~~~note [card]
 (#object)
@@ -205,7 +216,7 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 | Octave Shimmer | 16 modes, an octave up, Width 0.015 | 3 s | The note with a chorused octave above it |
 | Wood Cluster | 10 modes, Width 0.35 | 0.5 s | Heavy damping: a short, woody knock |
 
-- **Choosing a preset sets every sound parameter**, Voices and the Expression knobs included. It leaves the **MPE** switch alone.
+- **Choosing a preset sets every sound parameter**, Voices, the Expression knobs and Ring included (every factory preset has Ring off). It leaves the **MPE** switch alone.
 - The menu shows **--** until you choose one, and again when the editor is reopened. Changing a knob after choosing a preset doesn't change the name shown.
 - There's no way to save your own presets in StruckGaussian: the host saves the patch with its project, and most hosts can save a plugin's state as their own preset.
 ~~~
@@ -222,6 +233,7 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 - **Fewer Modes** makes a simpler sound, and costs less CPU.
 - **For an even keyboard**, keep **Contact** on Note-Rel. Wall-Clk makes the bass boomier and the top pingier, as real mallets do.
 - **For a hand-damped object on a pressure controller**, set Press>Decay negative: press into a note to stop it.
+- **Ring Pitch in whole octaves** (0, ±1) ties the ring mod to the note; anything else pulls the sound towards a clang. Add **Ring Fb** slowly: the top of its range is much louder.
 ~~~
 ~~~note [card]
 (#troubleshooting)
@@ -236,6 +248,6 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 - **Focus doesn't change a held note.** It's read at the strike; play the next note.
 - **The Expression knobs do nothing.** The controller isn't sending pressure or CC 74, or the knobs are at 0.
 - **Bends are huge.** MPE is on and the controller isn't an MPE controller: member channels bend ±48 semitones. Turn **MPE** off.
-- **Distortion.** Lower **Level**. Many loud notes ringing together add up.
+- **Distortion.** Lower **Level**. Many loud notes ringing together add up. With **Ring Fb** near the top, the feedback limit distorts loud notes too; lower Ring Fb or Level.
 - **A rebuilt StruckGaussian doesn't show its changes.** Quit and restart the host: a running host keeps the plugin it loaded first.
 ~~~
