@@ -79,8 +79,11 @@ A sine at the note, ring modulating each voice, its product added to the struck 
 - [x] Save / Load in the header write the patch as the factory presets' JSON and read it back (src/UI/PresetFile.hpp),
       through DPF's file dialog; MPE left out, loaded values clamped to each param's range. Fixed on the way: the
       dumper wrote no Ring section. ss-presetfile checks the round trip, every factory preset, and non-presets
-- [ ] By hand: Save and Load in a host on macOS, Windows and Linux (the dialogs are native on the first two, DPF's own
-      on Linux)
+- [x] AUv2: clap-wrapper gives no timers and (unpatched) never calls gui show(), so the UI's idle never ran and DPF never
+      collected the dialog's result. The GUI now runs its own main-run-loop timer when the host has none, started at
+      set_parent; the home folder comes from the account, not the sandboxed $HOME; failures show in the Preset menu
+- [x] By hand on macOS (2026-10-27): Save and Load in Logic Pro (AUv2) and StageHand (CLAP)
+- [ ] By hand: Save and Load on Windows and Linux (the dialog is native on Windows, DPF's own on Linux)
 
 ## Tests
 - all: cmake --build build -j && ctest --test-dir build --output-on-failure

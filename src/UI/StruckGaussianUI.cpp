@@ -3,6 +3,16 @@
 // drives the real framework-free ModalBank core (linked via pm_framework) to draw the current
 // mode layout and per-mode decay. Factory presets, and Save / Load of the patch as a preset file.
 
+// Before DPF's headers: CoreFoundation's MacTypes.h declares a global Point, ambiguous with DGL's
+// once DPF's using-declarations are in scope.
+#ifndef _WIN32
+#include <pwd.h>                             // presetDir: the account's home folder
+#include <unistd.h>
+#endif
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>   // the idle timer when the host has none (startIdleTimer)
+#endif
+
 #include "DistrhoUI.hpp"
 
 #include "src/DistrhoUIInternal.hpp" // DPF's UIExporter (DPF_ROOT_DIR/distrho is on the include path)
@@ -498,12 +508,13 @@ protected:
 
     /* -- Save / Load ------------------------------------------------------ */
     // The dialog is asynchronous: openFileBrowser() returns at once and the chosen path arrives in
-    // uiFileBrowserSelected(), so fBrowsing remembers which of the two asked.
+    // uiFileBrowserSelected(), so fBrowsing remembers which of the two asked. A second click opens
+    // a new dialog in place of one still open (DPF closes the old one), so a result that never
+    // arrives can't leave the buttons dead.
     enum class Browse { None, Save, Load };
 
     void browseForPreset(bool saving)
     {
-        if (fBrowsing != Browse::None) return; // one dialog at a time
         const std::string dir = presetDir();
         const std::string defaultName = (fPatchName.empty() ? std::string("Untitled") : fPatchName) + ".json";
         FileBrowserOptions opts;
@@ -532,6 +543,7 @@ protected:
             if (!writePresetFile(path.string(), fValues, name))
             {
                 std::fprintf(stderr, "[StruckGaussian] could not save %s\n", path.string().c_str());
+                showStatus("Couldn't save");
                 return;
             }
             showPatchName(name);
@@ -543,6 +555,7 @@ protected:
             {
                 std::fprintf(stderr, "[StruckGaussian] %s is not a StruckGaussian preset\n",
                              path.string().c_str());
+                showStatus("Couldn't load");
                 return;
             }
             applyPresetValues([&](const std::string& key, float& v) {
@@ -566,12 +579,26 @@ protected:
         if (fPresetDropdown) { fPresetDropdown->setPlaceholder(name); fPresetDropdown->setIndex(-1); }
     }
 
+    // A failed Save / Load says so in the menu, where the patch name would go: stderr is lost in most
+    // hosts. Unlike showPatchName(), it leaves the name Save offers alone.
+    void showStatus(const std::string& text)
+    {
+        if (fPresetDropdown) { fPresetDropdown->setPlaceholder(text); fPresetDropdown->setIndex(-1); }
+    }
+
     // The last folder used, else Documents/StruckGaussian (made on first use), else the home folder.
+    // The home folder is the account's, not $HOME: in a sandboxed host process (Logic runs AUs in
+    // one) $HOME is the sandbox's container. There, making the folder fails and the dialog opens on
+    // the home folder; the dialog itself grants access to whatever is picked.
     std::string presetDir() const
     {
         if (!fLastDir.empty()) return fLastDir;
         namespace fs = std::filesystem;
-        const char* home = std::getenv("HOME");
+        const char* home = nullptr;
+#ifndef _WIN32
+        if (const passwd* pw = getpwuid(getuid())) home = pw->pw_dir;
+#endif
+        if (home == nullptr) home = std::getenv("HOME");
         if (home == nullptr) home = std::getenv("USERPROFILE");
         if (home == nullptr) return "";
         std::error_code ec;
@@ -884,6 +911,9 @@ struct GuiState {
     double appliedScale = 0.0;   // the scale the UIExporter's pixel size was last derived with
     bool timerRegistered = false;
     clap_id timerId = 0;
+#ifdef __APPLE__
+    CFRunLoopTimerRef ownTimer = nullptr;   // when the host has no timer-support (startIdleTimer)
+#endif
 };
 
 #ifdef __APPLE__
@@ -923,6 +953,52 @@ constexpr const char* kWindowApi = CLAP_WINDOW_API_COCOA;
 constexpr const char* kWindowApi = CLAP_WINDOW_API_X11;
 #endif
 
+// The UI's idle (ss_gui_on_timer) runs on a host timer. Without idle, DPF never collects the file
+// dialog's result (Load and Save do nothing) and the UI's own uiIdle() never runs. clap-wrapper's
+// AUv2 host has no timers (its register_timer returns false), so on macOS the UI then runs its own
+// on the main run loop, in the common modes so it keeps firing while a menu or sheet is up.
+void startIdleTimer(GuiState* gui)
+{
+    if (gui->timerRegistered) return;
+    const clap_host_t* host = ss_plugin_host(gui->plugin);
+    const auto* timer = static_cast<const clap_host_timer_support_t*>(
+        host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+    if (timer != nullptr && timer->register_timer(host, 16 /* ~60fps */, &gui->timerId)) {
+        gui->timerRegistered = true;
+        return;
+    }
+#ifdef __APPLE__
+    if (gui->ownTimer != nullptr) return;
+    CFRunLoopTimerContext context = { 0, gui, nullptr, nullptr, nullptr };
+    gui->ownTimer = CFRunLoopTimerCreate(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 0.016, 0.016,
+                                         0, 0,
+                                         [](CFRunLoopTimerRef, void* info) {
+                                             ss_gui_on_timer(static_cast<GuiState*>(info)->plugin, 0);
+                                         },
+                                         &context);
+    if (gui->ownTimer != nullptr)
+        CFRunLoopAddTimer(CFRunLoopGetMain(), gui->ownTimer, kCFRunLoopCommonModes);
+#endif
+}
+
+void stopIdleTimer(GuiState* gui)
+{
+    if (gui->timerRegistered) {
+        const clap_host_t* host = ss_plugin_host(gui->plugin);
+        const auto* timer = static_cast<const clap_host_timer_support_t*>(
+            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+        if (timer != nullptr) timer->unregister_timer(host, gui->timerId);
+        gui->timerRegistered = false;
+    }
+#ifdef __APPLE__
+    if (gui->ownTimer != nullptr) {
+        CFRunLoopTimerInvalidate(gui->ownTimer);
+        CFRelease(gui->ownTimer);
+        gui->ownTimer = nullptr;
+    }
+#endif
+}
+
 bool gui_is_api_supported(const clap_plugin_t*, const char* api, bool isFloating)
 {
     return !isFloating && std::strcmp(api, kWindowApi) == 0;
@@ -950,12 +1026,7 @@ void gui_destroy(const clap_plugin_t* plugin)
     ss_plugin_set_gui(plugin, nullptr);
     if (gui == nullptr) return;
 
-    if (gui->timerRegistered) {
-        const clap_host_t* host = ss_plugin_host(plugin);
-        const auto* timer = static_cast<const clap_host_timer_support_t*>(
-            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
-        if (timer != nullptr) timer->unregister_timer(host, gui->timerId);
-    }
+    stopIdleTimer(gui);
     delete gui;   // the UIExporter is destroyed here, which tears the UI down
 }
 
@@ -1039,6 +1110,9 @@ bool gui_set_parent(const clap_plugin_t* plugin, const clap_window_t* window)
         // size instead, at the scale of the window it is actually in.
         applySize(gui);
     }
+    // Here as well as in show(): clap-wrapper's AUv2 view never calls show() unless its local patch
+    // (patches/clap-wrapper--auv2-gui-show.patch) is applied, and without idle Load / Save get no file.
+    startIdleTimer(gui);
     return true;
 }
 
@@ -1051,13 +1125,7 @@ bool gui_show(const clap_plugin_t* plugin)
     auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
     if (gui == nullptr || !gui->exporter) return false;
 
-    if (!gui->timerRegistered) {
-        const clap_host_t* host = ss_plugin_host(plugin);
-        const auto* timer = static_cast<const clap_host_timer_support_t*>(
-            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
-        if (timer != nullptr && timer->register_timer(host, 16 /* ~60fps */, &gui->timerId))
-            gui->timerRegistered = true;
-    }
+    startIdleTimer(gui);
     return true;
 }
 
@@ -1066,13 +1134,7 @@ bool gui_hide(const clap_plugin_t* plugin)
     auto* gui = static_cast<GuiState*>(ss_plugin_get_gui(plugin));
     if (gui == nullptr || !gui->exporter) return false;
 
-    if (gui->timerRegistered) {
-        const clap_host_t* host = ss_plugin_host(plugin);
-        const auto* timer = static_cast<const clap_host_timer_support_t*>(
-            host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
-        if (timer != nullptr) timer->unregister_timer(host, gui->timerId);
-        gui->timerRegistered = false;
-    }
+    stopIdleTimer(gui);
     return true;
 }
 
