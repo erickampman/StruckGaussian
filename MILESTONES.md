@@ -75,6 +75,13 @@ A sine at the note, ring modulating each voice, its product added to the struck 
       rows for new params; a static_assert now catches a missing row
 - [ ] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh)
 
+## Save and Load (2026-10-27)
+- [x] Save / Load in the header write the patch as the factory presets' JSON and read it back (src/UI/PresetFile.hpp),
+      through DPF's file dialog; MPE left out, loaded values clamped to each param's range. Fixed on the way: the
+      dumper wrote no Ring section. ss-presetfile checks the round trip, every factory preset, and non-presets
+- [ ] By hand: Save and Load in a host on macOS, Windows and Linux (the dialogs are native on the first two, DPF's own
+      on Linux)
+
 ## Tests
 - all: cmake --build build -j && ctest --test-dir build --output-on-failure
 

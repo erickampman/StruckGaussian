@@ -1,7 +1,7 @@
 // StruckGaussianUI.cpp — the modal-synthesis front end. Five grouped panels (Global, Strike, Object,
 // Decay, Timbre/Output) of reusable Knob/Dropdown controls, plus a live ModalSpectrum visual that
 // drives the real framework-free ModalBank core (linked via pm_framework) to draw the current
-// mode layout and per-mode decay. No presets / IFS pads / mod-matrix — this is the v1 modal voice.
+// mode layout and per-mode decay. Factory presets, and Save / Load of the patch as a preset file.
 
 #include "DistrhoUI.hpp"
 
@@ -11,7 +11,9 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -22,12 +24,14 @@
 #include "EmbeddedResources.hpp" // build-time codegen: logo PNG and help page bytes
 #include "GeneratedPresets.h"     // build-time codegen from Presets/*.json (see tools/gen_presets.py)
 #include "GroupBox.hpp"
+#include "HeaderButton.hpp"
 #include "HelpButton.hpp"
 #include "Knob.hpp"
 #include "Logo.hpp"
 #include "PopupMenu.hpp"
 #include "PresetKeys.hpp"         // param -> preset-JSON key map, shared with the dumper
 #include "PresetDump.hpp"         // dev-only JSON patch dumper (no-op unless STRUCKGAUSSIAN_PRESET_DUMP=1)
+#include "PresetFile.hpp"         // Save / Load: the patch as preset JSON
 
 #include "ModalBank.hpp"        // framework-free core, for the spectrum visual
 #include "ModalCloud.hpp"       // the Gaussian mode cloud, as ModalBankModule draws it
@@ -44,6 +48,7 @@ using namespace struckgaussian;  // params (kParams, ParamIndex)
 using DGL_NAMESPACE::Color;
 using DGL_NAMESPACE::Dropdown;
 using DGL_NAMESPACE::GroupBox;
+using DGL_NAMESPACE::HeaderButton;
 using DGL_NAMESPACE::HelpButton;
 using DGL_NAMESPACE::Knob;
 using DGL_NAMESPACE::Logo;
@@ -393,6 +398,10 @@ public:
         });
         fHelpButton->setLabel("Help");
 
+        // Save / Load the patch as a preset file (PresetFile.hpp), through the system file dialog.
+        fSaveButton = std::make_unique<HeaderButton>(this, "Save", [this] { browseForPreset(true); });
+        fLoadButton = std::make_unique<HeaderButton>(this, "Load", [this] { browseForPreset(false); });
+
         fMenu = std::make_unique<PopupMenu>(this, this); // created last → draws on top
 
         pushSpectrum();
@@ -452,31 +461,123 @@ protected:
         if (affectsSpectrum(id)) pushSpectrum();
     }
 
-    // Apply every param the selected preset has a value for (looked up by "module.item" key via
-    // kPresetKeys — the same mapping PresetDump.hpp uses to write these files). Params the preset
-    // doesn't mention keep their current value. parameterChanged() already syncs the widget and
-    // the spectrum for each param, so it's reused here instead of duplicating that dispatch.
+    // Apply every param the preset has a value for (looked up by "module.item" key via kPresetKeys —
+    // the same mapping PresetFile.hpp uses to write these files). Params the preset doesn't mention
+    // keep their current value; values are clamped to the param's range, since a loaded file may
+    // come from anywhere. parameterChanged() already syncs the widget and the spectrum for each
+    // param, so it's reused here instead of duplicating that dispatch.
+    template <typename Find>
+    void applyPresetValues(Find find)
+    {
+        for (uint32_t i = 0; i < kParamCount; ++i)
+        {
+            const std::string key = std::string(kPresetKeys[i].module) + "." + kPresetKeys[i].item;
+            float v;
+            if (!find(key, v)) continue;
+            v = std::clamp(v, kParams[i].min, kParams[i].max);
+            if (kParams[i].integer) v = std::round(v);
+            editParameter(i, true);
+            setParameterValue(i, v);
+            editParameter(i, false);
+            parameterChanged(i, v); // updates fValues[i], the widget, and the spectrum
+        }
+    }
+
     void applyPreset(int index)
     {
         if (index < 0 || index >= kPresetCount) return;
         const PresetEntry& preset = kPresets[index];
-        for (uint32_t i = 0; i < kParamCount; ++i)
-        {
-            const std::string key = std::string(kPresetKeys[i].module) + "." + kPresetKeys[i].item;
+        applyPresetValues([&](const std::string& key, float& v) {
             for (int j = 0; j < preset.count; ++j)
-            {
-                if (key == preset.values[j].key)
-                {
-                    const float v = preset.values[j].value;
-                    editParameter(i, true);
-                    setParameterValue(i, v);
-                    editParameter(i, false);
-                    parameterChanged(i, v); // updates fValues[i], the widget, and the spectrum
-                    break;
-                }
-            }
-        }
+                if (key == preset.values[j].key) { v = preset.values[j].value; return true; }
+            return false;
+        });
         if (fPresetDropdown) fPresetDropdown->setIndex(index);
+        fPatchName = preset.name; // Save offers it as the file name
+    }
+
+    /* -- Save / Load ------------------------------------------------------ */
+    // The dialog is asynchronous: openFileBrowser() returns at once and the chosen path arrives in
+    // uiFileBrowserSelected(), so fBrowsing remembers which of the two asked.
+    enum class Browse { None, Save, Load };
+
+    void browseForPreset(bool saving)
+    {
+        if (fBrowsing != Browse::None) return; // one dialog at a time
+        const std::string dir = presetDir();
+        const std::string defaultName = (fPatchName.empty() ? std::string("Untitled") : fPatchName) + ".json";
+        FileBrowserOptions opts;
+        opts.saving      = saving;
+        opts.title       = saving ? "Save StruckGaussian Patch" : "Load StruckGaussian Patch";
+        opts.startDir    = dir.empty() ? nullptr : dir.c_str();
+        opts.defaultName = saving ? defaultName.c_str() : nullptr;
+        opts.extension   = saving ? nullptr : "json";
+        fBrowsing = saving ? Browse::Save : Browse::Load;
+        if (!openFileBrowser(opts))
+            fBrowsing = Browse::None;
+    }
+
+    void uiFileBrowserSelected(const char* filename) override
+    {
+        const Browse mode = fBrowsing;
+        fBrowsing = Browse::None;
+        if (filename == nullptr || filename[0] == '\0') return; // cancelled
+
+        namespace fs = std::filesystem;
+        fs::path path(filename);
+        if (mode == Browse::Save)
+        {
+            if (!path.has_extension()) path += ".json";
+            const std::string name = path.stem().string();
+            if (!writePresetFile(path.string(), fValues, name))
+            {
+                std::fprintf(stderr, "[StruckGaussian] could not save %s\n", path.string().c_str());
+                return;
+            }
+            showPatchName(name);
+        }
+        else if (mode == Browse::Load)
+        {
+            PresetFileData data;
+            if (!readPresetFile(path.string(), data))
+            {
+                std::fprintf(stderr, "[StruckGaussian] %s is not a StruckGaussian preset\n",
+                             path.string().c_str());
+                return;
+            }
+            applyPresetValues([&](const std::string& key, float& v) {
+                for (const auto& kv : data.values)
+                    if (key == kv.first) { v = kv.second; return true; }
+                return false;
+            });
+            // Named as the factory presets are (tools/gen_presets.py): meta.name, else the file stem.
+            const bool hasName = !data.name.empty() && data.name != "Untitled";
+            showPatchName(hasName ? data.name : path.stem().string());
+        }
+        else return;
+        fLastDir = path.parent_path().string();
+    }
+
+    // A saved or loaded patch is not a factory preset: the menu shows its name, dimmed, with none
+    // of the factory entries ticked.
+    void showPatchName(const std::string& name)
+    {
+        fPatchName = name;
+        if (fPresetDropdown) { fPresetDropdown->setPlaceholder(name); fPresetDropdown->setIndex(-1); }
+    }
+
+    // The last folder used, else Documents/StruckGaussian (made on first use), else the home folder.
+    std::string presetDir() const
+    {
+        if (!fLastDir.empty()) return fLastDir;
+        namespace fs = std::filesystem;
+        const char* home = std::getenv("HOME");
+        if (home == nullptr) home = std::getenv("USERPROFILE");
+        if (home == nullptr) return "";
+        std::error_code ec;
+        const fs::path dir = fs::path(home) / "Documents" / "StruckGaussian";
+        fs::create_directories(dir, ec);
+        return ec ? std::string(home) : dir.string();
     }
 
     /* -- drawing / layout ------------------------------------------------- */
@@ -556,6 +657,16 @@ private:
         fHelpButton->setUiScale(s);
         fHelpButton->setSize(static_cast<uint>(helpW), static_cast<uint>(presetH));
         fHelpButton->setAbsolutePos(W - M - presetW - helpW, static_cast<int>(4 * s));
+
+        // Save and Load, left of Help, their boxes level with the others'.
+        const int fileW = static_cast<int>(52 * s);
+        const int loadX = W - M - presetW - helpW - fileW;
+        fLoadButton->setUiScale(s);
+        fLoadButton->setSize(static_cast<uint>(fileW), static_cast<uint>(presetH));
+        fLoadButton->setAbsolutePos(loadX, static_cast<int>(4 * s));
+        fSaveButton->setUiScale(s);
+        fSaveButton->setSize(static_cast<uint>(fileW), static_cast<uint>(presetH));
+        fSaveButton->setAbsolutePos(loadX - fileW, static_cast<int>(4 * s));
 
         // 3 rows under the header. Within a row the width is split by the cells each panel needs (its
         // column count), so controls get similar widths everywhere instead of a 2-control panel taking
@@ -728,6 +839,10 @@ private:
     std::unique_ptr<Logo>          fLogo;
     std::unique_ptr<Dropdown>      fPresetDropdown;
     std::unique_ptr<HelpButton>    fHelpButton;
+    std::unique_ptr<HeaderButton>  fSaveButton, fLoadButton;
+    Browse                         fBrowsing = Browse::None;
+    std::string                    fPatchName;          // the saved / loaded patch, "" for none yet
+    std::string                    fLastDir;            // where the last Save / Load went
     const clap_plugin_t*           fPlugin = nullptr;   // the raw CLAP plugin (see plugin_gui.h)
     float                          fValues[kParamCount];
     bool                           fHasFont = false;
