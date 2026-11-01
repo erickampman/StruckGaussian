@@ -83,7 +83,7 @@ A sine at the note, ring modulating each voice, its product added to the struck 
       collected the dialog's result. The GUI now runs its own main-run-loop timer when the host has none, started at
       set_parent; the home folder comes from the account, not the sandboxed $HOME; failures show in the Preset menu
 - [x] By hand on macOS (2026-10-27): Save and Load in Logic Pro (AUv2) and StageHand (CLAP)
-- [ ] By hand: Save and Load on Windows and Linux (the dialog is native on Windows, DPF's own on Linux)
+- [x] By hand on Linux (2026-11-01): Save and Load (DPF's own dialog)
 
 ## Tests
 - all: cmake --build build -j && ctest --test-dir build --output-on-failure
