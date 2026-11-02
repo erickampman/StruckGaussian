@@ -57,8 +57,8 @@ the measurements). Decided 2026-10-25:
         started near 281 Hz; a voice's first note started from A440). It reads the block's last sample now.
       - Final's level smoother started every voice at 1, not Level, so a voice's first note was 1/Level louder for
         ~20 ms (+3 dB at the default 0.7). It starts at the first block's values now.
-      ss-bend checks both. The other synths have one or both: ReleaseUMP R2-12, R2-13
-- [ ] macOS: build, auval (aumu StGa nLKL)
+      ss-bend checks both. The other synths had one or both, fixed the same way (2026-11-01)
+- [x] macOS: build, auval (aumu StGa nLKL) (2026-11-01)
 
 ## Experiment: ring mod (2026-10-26)
 A sine at the note, ring modulating each voice, its product added to the struck sound (src/Module/RingMod.hpp).
@@ -73,7 +73,8 @@ A sine at the note, ring modulating each voice, its product added to the struck 
 - [x] Panel: 1080x780; Strike and Ring two rows deep on the top row, beside the spectrum; Global stacks Voices and MPE
 - [x] Factory presets set the ring params to 0. Fixed on the way: the preset loader crashed while PresetKeys lacked
       rows for new params; a static_assert now catches a missing row
-- [ ] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh)
+- [ ] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh). 2026-11-01: not harsh,
+      but loud notes take the output past 0 dBFS; the clip is on the fed-back sample only. Left: Level, or tame the output
 
 ## Save and Load (2026-10-27)
 - [x] Save / Load in the header write the patch as the factory presets' JSON and read it back (src/UI/PresetFile.hpp),
@@ -112,7 +113,7 @@ A sine at the note, ring modulating each voice, its product added to the struck 
 - [x] clap-wrapper AUv2 GUI patch carried in `patches/` (calls `gui->show()`, which starts the render timer)
 - [x] Validated on macOS (Xcode 26.3, Ninja, 2026-10-21): ctest 12/12; clap-validator 35 pass, 0 fail;
       auval passes; Steinberg's VST3 validator 47 pass, 0 fail (lists Tuning + Brightness)
-- [ ] By hand: GUI, notes, automation and state recall in Logic (AUv2), REAPER (VST3 + AUv2), Bitwig (VST3);
+- [ ] By hand: GUI, notes, automation and state recall in Logic (AUv2), REAPER (VST3 + AUv2), Bitwig (VST3) (Logic done 2026-11-01);
       Bitwig per-note Tuning in the VST3
 - [ ] Linux: VST3 build in CI; not yet loaded in a Linux host
 
