@@ -6,7 +6,7 @@
 </div>
 
 <p>
-  <em>StruckGaussian is a CLAP instrument for macOS and Linux. Fine adjustment uses the Control key on both: on the Mac that is Control, not Cmd.</em>
+  <em>StruckGaussian is a CLAP and VST3 instrument on macOS and Linux, and an AUv2 instrument on macOS. Fine adjustment uses the Control key on both: on the Mac that is Control, not Cmd.</em>
 </p>
 
 ::: {.callout .callout-note .card}
@@ -32,7 +32,7 @@ Each note goes through three stages:
 
 ::: {.callout .callout-note .card}
 ## Getting Started {#getting-started}
-1. **Load StruckGaussian** on an instrument track in your host (REAPER, Bitwig, StageHand, or any CLAP host).
+1. **Load StruckGaussian** on an instrument track in your host (REAPER, Bitwig, StageHand, or any CLAP, VST3 or AU host).
 2. **Play.** The default patch (the same as the **Init** preset) is a 16-mode cloud half an octave wide, centred on the note, with a 2-second decay.
 3. **Pick a preset** from the **Preset** menu at the top right; see [Presets](#presets).
 4. **Change the cloud** with **Width** and **Centre** in the Object panel, and watch the spectrum at the top left redraw. **Seed** picks a different cloud of the same shape.
@@ -45,7 +45,7 @@ The host saves every parameter with its project.
 
 ::: {.callout .callout-note .card}
 ## The Panel {#panel}
-**The header:** the Unlikelyware logo (a click opens unlikelyware.com), the title, **Save** and **Load** (see [Presets](#presets)), **Help**, and the **Preset** menu.
+**The header:** the Unlikelyware logo (a click opens unlikelyware.com), the title and its tagline (*modal synthesis, Gaussian modes*), **Save** and **Load** (see [Presets](#presets)), **Help** (a **?** box that opens this page in your web browser), and the **Preset** menu.
 
 **Below it, three rows:**
 - **Top:** the [spectrum](#spectrum), and the **Strike** and **Ring** panels, whose controls are laid out two rows deep.
@@ -65,11 +65,11 @@ Each panel has its own colour: steel for Global, amber for Strike, pink for Ring
 |---|---|
 | Drag up or down | Change the value. About 200 points of drag covers the whole range. |
 | Control-drag | Ten times finer (Control on the Mac too) |
-| Scroll wheel | One step is 5% of the range; with Control, 0.5% |
+| Scroll wheel | One step is 5% of the knob's travel; with Control, 0.5% |
 | Shift-click | Back to the default value |
-| Click a menu | Opens its list; click a choice, or click elsewhere to close it |
+| Click a menu | Opens its list, the current choice highlighted; click a choice, or click elsewhere or press Escape to close it |
 
-Knobs with a time (Glide, Decay) work on a logarithmic scale, so the short end gets as much travel as the long end. Times under a second read in ms, longer ones in s.
+Knobs with a time (Glide, Decay), and the two widths (Width, Focus Wid), work on a logarithmic scale, so the short or narrow end gets as much travel as the long or wide end. Times under a second read in ms, longer ones in s. Width shows three decimals below 0.1 oct.
 :::
 
 </details>
@@ -261,9 +261,9 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 - **Choosing a preset sets every sound parameter**, Voices, the Expression knobs and Ring included (every factory preset has Ring off). It leaves the **MPE** switch alone.
 - The menu shows **--** until you choose one, and again when the editor is reopened. Changing a knob after choosing a preset doesn't change the name shown.
 
-**Your own patches:** **Save** and **Load**, left of Help, write the patch to a file and read one back, through the system's file dialog. The first time, the dialog opens on **Documents/StruckGaussian**; after that, on the last folder you used.
+**Your own patches:** **Save** and **Load**, left of Help, write the patch to a file and read one back, through the system's file dialog. The first time, the dialog opens on **Documents/StruckGaussian**; after that, on the last folder you used. Save offers the name of the preset or patch you last chose, or **Untitled**.
 - A saved patch has every sound parameter, like a factory preset, and leaves out **MPE**. Loading one sets those parameters and leaves MPE alone.
-- The menu then shows the patch's name, dimmed, in place of a factory preset's.
+- The menu then shows the patch's name, dimmed, in place of a factory preset's. If a file can't be written or isn't a StruckGaussian patch, the menu shows **Couldn't save** or **Couldn't load** instead.
 - The file is the same JSON as the factory presets, so a patch you save can be put in the source's `Presets` folder to build it in as a factory preset.
 - The host still saves the patch with its project, whether or not you saved it to a file.
 :::

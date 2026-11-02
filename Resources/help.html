@@ -284,7 +284,7 @@ tbody tr:nth-child(even) {
 </div>
 
 <p>
-  <em>StruckGaussian is a CLAP instrument for macOS and Linux. Fine adjustment uses the Control key on both: on the Mac that is Control, not Cmd.</em>
+  <em>StruckGaussian is a CLAP and VST3 instrument on macOS and Linux, and an AUv2 instrument on macOS. Fine adjustment uses the Control key on both: on the Mac that is Control, not Cmd.</em>
 </p>
 
 <section id="on-this-page" class="callout callout-note card">
@@ -333,7 +333,7 @@ your control of it.</p>
 <h2>Getting Started</h2>
 <ol type="1">
 <li><strong>Load StruckGaussian</strong> on an instrument track in your
-host (REAPER, Bitwig, StageHand, or any CLAP host).</li>
+host (REAPER, Bitwig, StageHand, or any CLAP, VST3 or AU host).</li>
 <li><strong>Play.</strong> The default patch (the same as the
 <strong>Init</strong> preset) is a 16-mode cloud half an octave wide,
 centred on the note, with a 2-second decay.</li>
@@ -358,9 +358,11 @@ the Strike panel: lower is harder and brighter.</li>
 <section id="panel" class="callout callout-note card">
 <h2>The Panel</h2>
 <p><strong>The header:</strong> the Unlikelyware logo (a click opens
-unlikelyware.com), the title, <strong>Save</strong> and
-<strong>Load</strong> (see <a href="#presets">Presets</a>),
-<strong>Help</strong>, and the <strong>Preset</strong> menu.</p>
+unlikelyware.com), the title and its tagline (<em>modal synthesis,
+Gaussian modes</em>), <strong>Save</strong> and <strong>Load</strong>
+(see <a href="#presets">Presets</a>), <strong>Help</strong> (a
+<strong>?</strong> box that opens this page in your web browser), and
+the <strong>Preset</strong> menu.</p>
 <p><strong>Below it, three rows:</strong></p>
 <ul>
 <li><strong>Top:</strong> the <a href="#spectrum">spectrum</a>, and the
@@ -403,7 +405,7 @@ range.</td>
 </tr>
 <tr>
 <td>Scroll wheel</td>
-<td>One step is 5% of the range; with Control, 0.5%</td>
+<td>One step is 5% of the knob's travel; with Control, 0.5%</td>
 </tr>
 <tr>
 <td>Shift-click</td>
@@ -411,13 +413,15 @@ range.</td>
 </tr>
 <tr>
 <td>Click a menu</td>
-<td>Opens its list; click a choice, or click elsewhere to close it</td>
+<td>Opens its list, the current choice highlighted; click a choice, or
+click elsewhere or press Escape to close it</td>
 </tr>
 </tbody>
 </table>
-<p>Knobs with a time (Glide, Decay) work on a logarithmic scale, so the
-short end gets as much travel as the long end. Times under a second read
-in ms, longer ones in s.</p>
+<p>Knobs with a time (Glide, Decay), and the two widths (Width, Focus
+Wid), work on a logarithmic scale, so the short or narrow end gets as
+much travel as the long or wide end. Times under a second read in ms,
+longer ones in s. Width shows three decimals below 0.1 oct.</p>
 </div>
 </details>
 
@@ -875,13 +879,16 @@ doesn't change the name shown.</li>
 <strong>Load</strong>, left of Help, write the patch to a file and read
 one back, through the system's file dialog. The first time, the dialog
 opens on <strong>Documents/StruckGaussian</strong>; after that, on the
-last folder you used.</p>
+last folder you used. Save offers the name of the preset or patch you
+last chose, or <strong>Untitled</strong>.</p>
 <ul>
 <li>A saved patch has every sound parameter, like a factory preset, and
 leaves out <strong>MPE</strong>. Loading one sets those parameters and
 leaves MPE alone.</li>
 <li>The menu then shows the patch's name, dimmed, in place of a factory
-preset's.</li>
+preset's. If a file can't be written or isn't a StruckGaussian patch,
+the menu shows <strong>Couldn't save</strong> or <strong>Couldn't
+load</strong> instead.</li>
 <li>The file is the same JSON as the factory presets, so a patch you
 save can be put in the source's <code>Presets</code> folder to build it
 in as a factory preset.</li>
