@@ -515,7 +515,11 @@ Since a cloud's modes aren't harmonics of the note, their new
 frequencies are inharmonic whatever the setting.</li>
 </ul>
 <p>The fed-back signal is limited to ±1, so very loud notes with Ring Fb
-near the top distort. The spectrum doesn't show that distortion.</p>
+near the top distort. The spectrum doesn't show that distortion.
+StruckGaussian's output never goes past 0 dBFS: above −6 dBFS a gentle
+curve rounds the loudest peaks off (each voice's, and the whole
+output's) instead of clipping them flat, so a loud Ring Fb note sounds
+compressed rather than harsh.</p>
 </section>
 <section id="object" class="callout callout-note card">
 <h2>Object</h2>
@@ -961,10 +965,11 @@ isn't sending pressure or CC 74, or the knobs are at 0.</li>
 <li><strong>Bends are huge.</strong> MPE is on and the controller isn't
 an MPE controller: member channels bend ±48 semitones. Turn
 <strong>MPE</strong> off.</li>
-<li><strong>Distortion.</strong> Lower <strong>Level</strong>. Many loud
-notes ringing together add up. With <strong>Ring Fb</strong> near the
-top, the feedback limit distorts loud notes too; lower Ring Fb or
-Level.</li>
+<li><strong>Distortion, or loud notes sounding squashed.</strong> Lower
+<strong>Level</strong>. Many loud notes ringing together add up, and
+above −6 dBFS the output's gentle curve rounds them off. With
+<strong>Ring Fb</strong> near the top, the feedback limit distorts loud
+notes too; lower Ring Fb or Level.</li>
 <li><strong>A rebuilt StruckGaussian doesn't show its changes.</strong>
 Quit and restart the host: a running host keeps the plugin it loaded
 first.</li>

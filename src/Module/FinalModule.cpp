@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "FinalModule.hpp"
+#include "SoftKnee.hpp"
 
 struct FinalState {
     // DC blocker state
@@ -124,11 +125,15 @@ const KPBuffPair* ProcessFinalModule(uint64_t processCallID, uint32_t count, Mod
             R = M - S;
         }
 
-        // 4) Clip (hard ceiling)
-        const float hi = clip;
-        const float lo = -clip;
-        L = std::clamp(L, lo, hi);
-        R = std::clamp(R, lo, hi);
+        // 4) Ceiling: the gentle curve (SoftKnee.hpp) scaled to the clip level, not a hard clip, so
+        //    a voice Ring Fb drives hard rounds off instead of flattening (ReleaseUMP R2-26).
+        //    Unchanged below half the clip level; never past it.
+        if (clip > 0.0f) {
+            L = clip * softKnee(L / clip);
+            R = clip * softKnee(R / clip);
+        } else {
+            L = R = 0.0f;
+        }
 
         *outL++ = L;
         *outR++ = R;

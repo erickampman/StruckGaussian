@@ -420,7 +420,8 @@ set_tests_properties(ss-presetfile PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS"
 add_executable(ss-clap-host-test test/ss_clap_host_test.cpp)
 target_include_directories(ss-clap-host-test PRIVATE
     external/clap/include             # <clap/clap.h>
-    plugin)                           # StruckGaussianParams.h (parameter ids/enums)
+    plugin                            # StruckGaussianParams.h (parameter ids/enums)
+    src/Common)                       # SoftKnee.hpp
 # dlopen/dlsym/dlclose: on glibc before 2.34 these live in libdl, so ask CMake for the right library
 # rather than assuming it is part of libc (it is not, on older Linux distributions).
 target_link_libraries(ss-clap-host-test PRIVATE ${CMAKE_DL_LIBS})

@@ -73,8 +73,12 @@ A sine at the note, ring modulating each voice, its product added to the struck 
 - [x] Panel: 1080x780; Strike and Ring two rows deep on the top row, beside the spectrum; Global stacks Voices and MPE
 - [x] Factory presets set the ring params to 0. Fixed on the way: the preset loader crashed while PresetKeys lacked
       rows for new params; a static_assert now catches a missing row
-- [ ] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh). 2026-11-01: not harsh,
-      but loud notes take the output past 0 dBFS; the clip is on the fed-back sample only. Left: Level, or tame the output
+- [x] By hand: listened to; Ring Fb's clip at loud levels heard and judged (raise it, or tanh). 2026-11-01: not harsh,
+      but loud notes take the output past 0 dBFS; the clip is on the fed-back sample only. Left: Level, or tame the output.
+      2026-11-07, tamed (ReleaseUMP R2-26): a soft knee (src/Common/SoftKnee.hpp: unchanged to -6 dBFS, then
+      0.5 + 0.5 tanh, never past 0 dBFS) replaces each voice's hard ceiling in FinalModule (scaled to its clip level),
+      and runs again on the summed output in plugin.cpp. ss-clap checks the curve, a loud Ring Fb voice (peak under
+      1, not flat-topped: the hard clip left ~5000 samples at the peak) and a loud chord
 
 ## Save and Load (2026-10-27)
 - [x] Save / Load in the header write the patch as the factory presets' JSON and read it back (src/UI/PresetFile.hpp),

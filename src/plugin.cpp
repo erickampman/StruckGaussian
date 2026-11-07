@@ -36,6 +36,7 @@
 #include <memory>
 #include <string>
 
+#include "SoftKnee.hpp"
 #include "StruckGaussianParams.h"
 #include "VoiceManager.hpp"
 #include "clap_ump.h"
@@ -544,6 +545,10 @@ clap_process_status plug_process(const clap_plugin_t* plugin, const clap_process
 
     for (; nextEvent < numEvents; ++nextEvent) processEvent(p, in->get(in, nextEvent));
 
+    // The gentle in/out curve (SoftKnee.hpp): untouched below -6 dBFS, never past 0 dBFS, so Ring Fb
+    // on loud notes can't overload the host.
+    softKnee(left, frames);
+    softKnee(right, frames);
     return CLAP_PROCESS_CONTINUE;
 }
 

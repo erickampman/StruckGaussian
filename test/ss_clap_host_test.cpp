@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "SoftKnee.hpp"             // the output curve, checked on its own below
 #include "StruckGaussianParams.h"   // parameter ids/enums; header-only, nothing is linked from it
 
 using namespace struckgaussian;
@@ -868,6 +869,72 @@ int main(int argc, char** argv) {
         const clap_event_midi_t midi1 = makeMidi1(0x90, uint8_t(kNote), 100);
         const double hz = pitchOfNote(lib, &midi1.header, kC4Hz, "MIDI 1.0 note-on (C4)");
         check(hz > 0.0, "MIDI 1.0 dialect reaches the engine");
+    }
+
+    // --- the output never passes 0 dBFS (ReleaseUMP R2-26) -------------------------------------
+    // The curve itself: unchanged up to -6 dBFS, smooth past it, odd, rising, and never past 1.
+    std::printf("Output soft knee:\n");
+    {
+        check(softKnee(0.25f) == 0.25f && softKnee(-0.5f) == -0.5f, "soft knee: unchanged up to -6 dBFS");
+        check(softKnee(0.6f) < 0.6f && softKnee(0.6f) > 0.59f, "soft knee: gentle just past the knee");
+        check(softKnee(-2.0f) == -softKnee(2.0f), "soft knee: odd");
+        bool rising = true, bounded = true;
+        for (float x = 0.0f, prev = -1.0f; x < 50.0f; x += 0.01f) {
+            const float y = softKnee(x);
+            rising  = rising && y >= prev;
+            bounded = bounded && y <= 1.0f;
+            prev    = y;
+        }
+        check(rising && bounded, "soft knee: rising, and never past 1");
+    }
+    // The plugin: six loud voices at full Ring and Ring Fb, which overloaded the host before.
+    {
+        Instance inst;
+        check(inst.create(lib), "plugin instance created (Ring Fb)");
+        installTestPatch(inst.plugin);
+        sendParam(inst.plugin, kParamModeCount, 16.0);
+        sendParam(inst.plugin, kParamLevel, 2.0);   // Level's top
+        sendParam(inst.plugin, kParamRingLevel, 1.0);
+        sendParam(inst.plugin, kParamRingFeedback, 0.98);
+        // C3 on six channels: six voices in phase, so their sum goes well past any one of them.
+        std::vector<clap_event_note_t> notes;
+        for (int16_t ch = 0; ch < 6; ++ch) {
+            notes.push_back(makeClapNoteOn(48, 1.0));
+            notes.back().channel = ch;
+        }
+        std::vector<const clap_event_header_t*> headers;
+        for (clap_event_note_t& n : notes) headers.push_back(&n.header);
+        const StereoAudio audio = renderStereo(inst.plugin, uint32_t(kSampleRate), headers.data(), uint32_t(headers.size()));
+        bool finite = true;
+        for (float x : audio.left) finite = finite && std::isfinite(x);
+        const float peak = std::max(peakOf(audio.left), peakOf(audio.right));
+        std::printf("        six voices in unison, Level 2, Ring 1, Ring Fb 0.98: peak %.6f\n", double(peak));
+        check(finite, "Ring Fb chord: output is finite");
+        check(peak > kSoftKnee, "Ring Fb chord: loud enough to reach the knee");
+        check(peak <= 1.0f, "Ring Fb chord: never past 0 dBFS");
+        inst.destroy();
+    }
+
+    // One loud voice at full Ring and Ring Fb: each voice's ceiling rounds it off rather than flattening
+    // it (a hard clip left hundreds of samples sitting at exactly the same peak).
+    {
+        Instance inst;
+        check(inst.create(lib), "plugin instance created (Ring Fb, one voice)");
+        installTestPatch(inst.plugin);
+        sendParam(inst.plugin, kParamModeCount, 16.0);
+        sendParam(inst.plugin, kParamLevel, 2.0);
+        sendParam(inst.plugin, kParamRingLevel, 1.0);
+        sendParam(inst.plugin, kParamRingFeedback, 0.98);
+        clap_event_note_t note = makeClapNoteOn(48, 1.0);
+        const clap_event_header_t* headers[] = { &note.header };
+        const StereoAudio audio = renderStereo(inst.plugin, uint32_t(kSampleRate), headers, 1);
+        const float peak = peakOf(audio.left);
+        int atPeak = 0;
+        for (float x : audio.left) atPeak += std::fabs(std::fabs(x) - peak) < 1e-6f ? 1 : 0;
+        std::printf("        one voice, Level 2, Ring 1, Ring Fb 0.98: peak %.6f, %d samples at it\n", double(peak), atPeak);
+        check(peak <= 1.0f, "Ring Fb voice: never past 0 dBFS");
+        check(atPeak < 8, "Ring Fb voice: rounded off, not flattened by a hard clip");
+        inst.destroy();
     }
 
     if (lib.handle != nullptr) {

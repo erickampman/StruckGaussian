@@ -104,7 +104,7 @@ An experimental ring modulator on each voice. It multiplies the sound by a sine 
 - **Ring Fb** (0–0.98, default 0): feeds the output back into the ring modulator, one sample later. Each trip round adds the sine's frequency again, so the new frequencies go on in steps: the mode ± 1, 2, 3… times the sine's frequency. Higher Ring Fb makes the series longer and buzzier and raises the level, more on low modes than high, so watch **Level**. It stops short of 1, where the loop would run away. It works with Ring at 0 too.
 - **Ring Pitch** (−4 to +4 oct, default 0): the sine's pitch, in octaves from the note. The sine follows the played note and pitch bend, but not the Object panel's **Pitch**. At **0** the sine is the note itself, so the note's own mode (with **Keep Fund** on) gains its octave, plus a DC offset you can't hear. Whole octaves (**±1**) keep the new frequencies tied to the note; other settings add tones unrelated to it. Since a cloud's modes aren't harmonics of the note, their new frequencies are inharmonic whatever the setting.
 
-The fed-back signal is limited to ±1, so very loud notes with Ring Fb near the top distort. The spectrum doesn't show that distortion.
+The fed-back signal is limited to ±1, so very loud notes with Ring Fb near the top distort. The spectrum doesn't show that distortion. StruckGaussian's output never goes past 0 dBFS: above −6 dBFS a gentle curve rounds the loudest peaks off (each voice's, and the whole output's) instead of clipping them flat, so a loud Ring Fb note sounds compressed rather than harsh.
 :::
 
 ::: {.callout .callout-note .card}
@@ -295,7 +295,7 @@ The **Preset** menu at the top right holds the factory presets, in alphabetical 
 - **Focus doesn't change a held note.** It's read at the strike; play the next note.
 - **The Expression knobs do nothing.** The controller isn't sending pressure or CC 74, or the knobs are at 0.
 - **Bends are huge.** MPE is on and the controller isn't an MPE controller: member channels bend ±48 semitones. Turn **MPE** off.
-- **Distortion.** Lower **Level**. Many loud notes ringing together add up. With **Ring Fb** near the top, the feedback limit distorts loud notes too; lower Ring Fb or Level.
+- **Distortion, or loud notes sounding squashed.** Lower **Level**. Many loud notes ringing together add up, and above −6 dBFS the output's gentle curve rounds them off. With **Ring Fb** near the top, the feedback limit distorts loud notes too; lower Ring Fb or Level.
 - **A rebuilt StruckGaussian doesn't show its changes.** Quit and restart the host: a running host keeps the plugin it loaded first.
 :::
 
