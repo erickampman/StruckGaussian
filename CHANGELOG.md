@@ -5,6 +5,8 @@ All notable changes to StruckGaussian. Versions follow the git tags; the format 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-14
+
 First public preview.
 
 ### Added
