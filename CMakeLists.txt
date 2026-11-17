@@ -89,10 +89,11 @@ add_custom_target(generate_presets DEPENDS "${STRUCKGAUSSIAN_GENERATED_PRESETS_H
 # on the resource file once built — same reasoning as the preset codegen above.
 set(STRUCKGAUSSIAN_RESOURCES_HPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.hpp")
 set(STRUCKGAUSSIAN_RESOURCES_CPP "${CMAKE_BINARY_DIR}/generated/EmbeddedResources.cpp")
-# res2c.py embeds a whole folder and names each symbol by the file's stem, so help.md (the source of
-# help.html) would collide with help.html. Copy everything but *.md into a staging folder first.
+# res2c.py embeds a whole folder and names each symbol by the file's stem, so help.html (help.md made
+# into a web page, for the site) would collide with help.md, which the plugin's help window reads.
+# Copy everything but help.html into a staging folder first.
 file(GLOB STRUCKGAUSSIAN_RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Resources/*")
-list(FILTER STRUCKGAUSSIAN_RESOURCE_FILES EXCLUDE REGEX "\\.md$")
+list(FILTER STRUCKGAUSSIAN_RESOURCE_FILES EXCLUDE REGEX "\\.html$")
 set(STRUCKGAUSSIAN_RESOURCES_STAGING "${CMAKE_BINARY_DIR}/generated/Resources")
 add_custom_command(
     OUTPUT "${STRUCKGAUSSIAN_RESOURCES_HPP}" "${STRUCKGAUSSIAN_RESOURCES_CPP}"
@@ -136,8 +137,8 @@ set_target_properties(struckgaussian_core PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON)
-# uw-core (git submodule), for one header: uw/base/HelpServer.h, which serves the
-# help page over loopback on Linux (a snap browser can't read /tmp). Nothing to link.
+# uw-core (git submodule), for headers only: uw/dgl/HelpWindow.hpp and uw/help/, the help page
+# in the plugin's own window. Nothing to link.
 # STRUCKGAUSSIAN_UW_CORE_DIR points at another uw-core clone (e.g. ../uw-core).
 set(STRUCKGAUSSIAN_UW_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/uw-core" CACHE PATH "uw-core source")
 target_include_directories(struckgaussian_core PRIVATE "${STRUCKGAUSSIAN_UW_CORE_DIR}/src")

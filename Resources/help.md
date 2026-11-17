@@ -45,7 +45,7 @@ The host saves every parameter with its project.
 
 ::: {.callout .callout-note .card}
 ## The Panel {#panel}
-**The header:** the Unlikelyware logo (a click opens unlikelyware.com), the title and its tagline (*modal synthesis, Gaussian modes*), **Save** and **Load** (see [Presets](#presets)), **Help** (a **?** box that opens this page in your web browser), and the **Preset** menu.
+**The header:** the Unlikelyware logo (a click opens unlikelyware.com), the title and its tagline (*modal synthesis, Gaussian modes*), **Save** and **Load** (see [Presets](#presets)), **Help** (a **?** box that opens this page in a window of its own), and the **Preset** menu.
 
 **Below it, three rows:**
 - **Top:** the [spectrum](#spectrum), and the **Strike** and **Ring** panels, whose controls are laid out two rows deep.
